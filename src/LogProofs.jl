@@ -50,7 +50,8 @@ function prove(proposition::LogKnowledge{G}, verifier::Verifier, x::Integer; suf
 
     R = g^r
 
-    c = challenge(verifier, proposition, R; filter(!isnothing, (;suffix))...) # suffix is optional
+    #c = challenge(verifier, proposition, R; filter(!isnothing, (;suffix))...) 
+    c = isnothing(suffix) ? challenge(verifier, proposition, R) : challenge(verifier, proposition, R; suffix)
 
     s = (r + c * x) % order(G)
 
@@ -62,7 +63,8 @@ function verify(proposition::LogKnowledge, proof::SchnorrProof, verifier::Verifi
     (; g, y) = proposition
     (; R, s) = proof
 
-    c = challenge(verifier, proposition, R; filter(!isnothing, (;suffix))...)
+    #c = challenge(verifier, proposition, R; filter(!isnothing, (;suffix))...)
+    c = isnothing(suffix) ? challenge(verifier, proposition, R) : challenge(verifier, proposition, R; suffix)
 
     return g^s == R * y^c
 end
