@@ -343,12 +343,44 @@ function convert(::Type{Vector{ElGamalRow{G, 1}}}, tree::Node; allow_one=false) 
     return 𝐞
 end
 
+
+function convert(::Type{Vector{ElGamalRow{G, N}}}, tree::Node; allow_one=false) where {G <: Group, N}
+
+    #𝐚 = convert(NTuple{N, Vector{G}}, tree[1]; allow_one)
+    #𝐛 = convert(NTuple{N, Vector{G}}, tree[2]; allow_one)
+
+    𝐚 = ntuple(n -> convert(Vector{G}, tree[1][n]; allow_one), N)
+    𝐛 = ntuple(n -> convert(Vector{G}, tree[2][n]; allow_one), N)
+
+    𝐞 = [ElGamalRow(ai, bi) for (ai, bi) in zip(zip(𝐚...), zip(𝐛...))]
+    
+    return 𝐞
+end
+
 function convert(::Type{ElGamalRow{G, 1}}, tree::Node; allow_one=false) where G <: Group
 
     a_tree, b_tree = tree.x
 
     a = convert(G, a_tree; allow_one)
     b = convert(G, b_tree; allow_one)
+    
+    return ElGamalRow(a, b)
+end
+
+
+convert(::Type{NTuple{N, G}}, tree::Node; allow_one=false) where {G <: Group, N} = ntuple(n -> convert(G, tree[n]; allow_one), N)
+
+
+convert(::Type{NTuple{N, BigInt}}, tree::Node) where N = ntuple(n -> convert(BigInt, tree[n]), N)
+convert(::Type{NTuple{1, BigInt}}, tree::Leaf) = tuple(convert(BigInt, tree))
+    
+
+function convert(::Type{ElGamalRow{G, N}}, tree::Node; allow_one=false) where {G <: Group, N}
+
+    a_tree, b_tree = tree.x
+
+    a = convert(NTuple{N, G}, a_tree; allow_one)
+    b = convert(NTuple{N, G}, b_tree; allow_one)
     
     return ElGamalRow(a, b)
 end
@@ -360,6 +392,15 @@ function Tree(row::ElGamalRow{<:Group, 1})
     return Tree((a, b))
 end
 
+function Tree(row::ElGamalRow{<:Group, N}) where N
+
+    a = ntuple(n -> row[n].a, N)
+    b = ntuple(n -> row[n].b, N)
+
+    return Tree((a, b))
+end
+
+
 function Tree(𝐞::Vector{<:ElGamalRow{<:Group, 1}})
 
     𝐚 = [i[1].a for i in 𝐞]
@@ -367,6 +408,16 @@ function Tree(𝐞::Vector{<:ElGamalRow{<:Group, 1}})
 
     tree = Tree((𝐚, 𝐛))
     
+    return tree
+end
+
+function Tree(𝐞::Vector{<:ElGamalRow{<:Group, N}}) where N
+
+    𝐚 = ntuple(n -> [i[n].a for i in 𝐞], N)
+    𝐛 = ntuple(n -> [i[n].b for i in 𝐞], N)
+
+    tree = Tree((𝐚, 𝐛))
+
     return tree
 end
 
@@ -399,7 +450,7 @@ function marshal_publickey(y::G, g::G) where G <: Group
 end
 
 
-
+# TOOD: change return order
 function unmarshal_publickey(tree::Tree; relative::Bool = false)
     
     g = unmarshal(tree.x[1])

@@ -220,19 +220,6 @@ end
 Serializer.load(::Type{P}, ::Type{DecryptionInv}, path::Path) where P <: ChaumPedersenProof = Serializer.load(P, path; prefix="DecryptionInv")
 
 
-
-#treespec(::Type{<:Decryption}) = 
-
-# # Keeping simple
-# Serializer.treespec(::Type{Simulator{<:Decryption}}) = (
-#     "protInfo.xml", 
-#     "publicKey.bt",
-#     "Ciphertexts.bt",
-#     "Decryption.bt",
-#     "nizkp/DecryptionCommitment.bt",
-#     "nizkp/DecryptionReply.bt"
-# )
-
 Serializer.treespec(::Type{<:Decryption}) = (
     "publicKey.bt",
     "Ciphertexts.bt",
@@ -254,18 +241,6 @@ Serializer.treespec(::Type{<:ChaumPedersenProof}, ::Type{<:DecryptionInv}) = (
     "DecryptionInvCommitment.bt",
     "DecryptionInvReply.bt"
 )
-
-
-# # Keeping simple
-# Serializer.treespec(::Type{Simulator{<:DecryptionInv}}) = (
-#     "protInfo.xml", 
-#     "publicKey.bt",
-#     "Ciphertexts.bt",
-#     "DecryptionInv.bt",
-#     "nizkp/DecryptionInvCommitment.bt",
-#     "nizkp/DecryptionInvReply.bt"
-# )
-
 
 
 end

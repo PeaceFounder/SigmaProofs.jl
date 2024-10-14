@@ -4,12 +4,20 @@ using CryptoGroups.Utils: @check
 using CryptoGroups: Group
 import Base: *, ^
 
+width(x) = width(typeof(x))
+width(T::Type) = error("Width is not implemented for $T")
+
+width(::Type{NTuple{N, <:Group}}) where N = N
+width(::Type{<:AbstractVector{<:NTuple{N, <:Group}}}) where N = N
+
 struct ElGamalElement{G<:Group}
     a::G
     b::G
 end
 
 ElGamalElement(m::G) where G <: Group = ElGamalElement(one(G), m)
+
+width(::Type{<:ElGamalElement}) = 1
 
 *(x::ElGamalElement{G}, y::ElGamalElement{G}) where G <: Group = ElGamalElement(x.a * y.a, x.b * y.b)
 *(x::ElGamalElement{G}, y::Tuple{G, G}) where G <: Group = x * ElGamalElement(y[1], y[2])
@@ -26,10 +34,14 @@ struct ElGamalRow{G<:Group, N}
 end
 
 ElGamalRow(a::G, b::G) where G <: Group = ElGamalRow(ElGamalElement(a, b))
+ElGamalRow(a::NTuple{N, G}, b::NTuple{N, G}) where {N, G <: Group} = ElGamalRow{G, N}(ntuple(n -> ElGamalElement(a[n], b[n]), N))
 
 ElGamalRow(row::NTuple{N, G}) where {N, G <: Group} = convert(ElGamalRow{G, N}, row)
 ElGamalRow(element::ElGamalElement{G}) where {G <: Group} = convert(ElGamalRow{G, 1}, element)
 ElGamalRow(row::AbstractVector{<:ElGamalElement{G}}) where {G <: Group} = convert(ElGamalRow{G}, row)
+
+width(::Type{ElGamalRow{<:Group, N}}) where N = N
+width(::Type{<:AbstractVector{<:ElGamalRow{<:Group, N}}}) where N = N
 
 Base.convert(::Type{ElGamalRow{G, N}}, row::NTuple{N, G}) where {N, G<:Group} = ElGamalRow(tuple([ElGamalElement(mi) for mi in row]...))
 Base.convert(::Type{ElGamalRow{G, 1}}, element::ElGamalElement{G}) where G <: Group = ElGamalRow((element,))
@@ -78,6 +90,8 @@ end
 (enc::Enc{G})(m::AbstractVector{<:ElGamalElement{G}}, r::AbstractVector{<:Integer}) where G <: Group = enc.(m, r)
 
 (enc::Enc)(r::NTuple{N, <:Integer}) where N = ElGamalRow(enc.(r))
+(enc::Enc)(r::Vector{<:Integer}) = ElGamalRow(enc.(r))
+
 (enc::Enc{G})(e::ElGamalRow{G}, r::Integer) where G <: Group = e * enc(r) # Tuple is treated as a scalar
 (enc::Enc{G})(e::ElGamalRow{G}, r::NTuple{N, <:Integer}) where {N, G <: Group} = e * enc(r)
 (enc::Enc{G})(m::NTuple{N, G}, r::Integer) where {N, G <: Group} = enc(ElGamalRow(m), r)
@@ -90,13 +104,17 @@ end
 
 
 function (enc::Enc{G})(m::AbstractVector{<:ElGamalRow{G}}, r::AbstractMatrix{<:Integer}) where G <: Group
-    @check length(r[:, 1]) == length(m[1]) "Dimensions not equal"
-    return [enc(mi, tuple(ri...)) for (mi, ri) in zip(m, eachcol(r))]
+
+    @check size(r) == (length(m), width(m)) "Dimensions not equal"
+
+    return [enc(mi, tuple(ri...)) for (mi, ri) in zip(m, eachrow(r))]
 end
 
 function (enc::Enc{G})(m::AbstractVector{<:NTuple{N, G}}, r::AbstractMatrix{<:Integer}) where {N, G <: Group}
-    @check length(r[:, 1]) == N "Dimensions not equal"
-    return [enc(mi, tuple(ri...)) for (mi, ri) in zip(m, eachcol(r))]
+
+    @check size(r) == (length(m), width(m)) "Dimensions not equal"
+    
+    return [enc(mi, tuple(ri...)) for (mi, ri) in zip(m, eachrow(r))]
 end
 
 

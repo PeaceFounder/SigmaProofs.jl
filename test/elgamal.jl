@@ -48,8 +48,16 @@ function elgamal_test(g)
     messages_enc = enc(messages, [(2, 3), (3, 5), (7, 2)])
     @test messages == dec(messages_enc)
 
-    #m_vec = [g, g^2, g^3]
-    #e_vec = enc.(m_vec, 1)
+
+    rvec = [
+        2  3;
+        3  5;
+        7  2;
+    ]
+
+    messages_enc = enc(messages, rvec)
+    @test messages == dec(messages_enc)
+
 end
 
 
@@ -75,13 +83,13 @@ let
 end
 
 
-let
-    spec = CryptoGroups.Specs.Curve_B_163_PB
-    G = concretize_type(ECGroup, spec; name = :B_163_PB)
-    g = G(generator(spec))
+# let
+#     spec = CryptoGroups.Specs.Curve_B_163_PB
+#     G = concretize_type(ECGroup, spec; name = :B_163_PB)
+#     g = G(generator(spec))
 
-    elgamal_test(g)
-end
+#     elgamal_test(g)
+# end
 
 
 

@@ -11,21 +11,6 @@ using Base.Iterators: flatten
 using ..SigmaProofs.Parser: Tree
 
 
-# # ToDo: put this in CryptoPRG
-# using Random: RandomDevice
-
-# function gen_roprg(ρ::AbstractVector{UInt8})
-
-#     rohash = HashSpec("sha256")
-#     prghash = HashSpec("sha256")
-#     roprg = ROPRG(ρ, rohash, prghash)
-
-#     return roprg
-# end
-
-# gen_roprg() = gen_roprg(rand(RandomDevice(), UInt8, 32))
-
-
 struct LogKnowledge{G <: Group} <: Proposition
     g::G
     y::G
