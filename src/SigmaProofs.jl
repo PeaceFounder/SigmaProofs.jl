@@ -56,8 +56,8 @@ include("Serializer.jl")
 include("LogProofs.jl")
 include("DecryptionProofs.jl")
 include("CommitmentShuffle.jl")
-#include("RangeProofs.jl")
-#include("SecretSharing.jl")
+include("RangeProofs.jl")
+include("SecretSharing.jl")
 include("Verificatum/Verificatum.jl")
 
 # It is highly unlikelly that one would need to work with multiple verifier implementations 

@@ -1,5 +1,10 @@
 module RangeProofs
 
+using CryptoGroups
+using CryptoGroups.Utils: @check
+using ..SigmaProofs: Proposition, Proof, Verifier
+using ..SigmaProofs.LogProofs: ChaumPedersenProof
+
 # TODO: NEED TO DO TDD TO GET THE CODE IN WORKING STATE
 
 # A range proof is a cryptographic technique that demonstrates a secret message belongs to a set of group elements defined by a specific range of exponents, without revealing the actual message. This code focuses on a simplified version for a single bit, as described in reference [1]. This implementation proves two statements in parallel, with one serving as a "dummy" statement, exemplifying a basic form of OR composition in cryptography. This approach represents one of the simplest examples of OR composition. For those interested in exploring more complex OR and AND compositions in cryptographic protocols, lecture notes [2] provides a good starting point.
@@ -181,11 +186,11 @@ function prove(proposition::BitCommit{G}, verifier::Verifier, v::Bool, α::BigIn
         error("v must be {0, 1}")
     end
 
-    return BitCommitProof(b₁, b₂, d₁, d₂, r₁, r₂)
+    return BitProof(b₁, b₂, d₁, d₂, r₁, r₂)
 end
 
 
-function verify(proposition::BitCommit{G}, proof::BitCommitProof{G}, verifier::Verifier) where G <: Group
+function verify(proposition::BitCommit{G}, proof::BitProof{G}, verifier::Verifier) where G <: Group
 
     (; g, h, 𝐺, x, y) = proposition
     (; b₁, b₂, d₁, d₂, r₁, r₂) = proof
@@ -255,7 +260,7 @@ struct NRangeProof{G<:Group} <: RangeCommitProof{G}
 end
 
 
-function prove(proposition::NRangeCommit{G<:Group}, verifier::Verifier, v::Int, α::Integer)
+function prove(proposition::NRangeCommit{G}, verifier::Verifier, v::Int, α::Integer) where G <: Group
 
     (; n, g, h, 𝐺) = proposition
 
@@ -329,7 +334,7 @@ struct RangeProof{G<:Group} <: RangeCommitProof{G}
 end
 
 
-function prove(proposition::RangeCommit{G<:Group}, verifier::Verifier, value::Int; α = rand(2:order(G) - 1))
+function prove(proposition::RangeCommit{G}, verifier::Verifier, value::Int; α = rand(2:order(G) - 1)) where G <: Group
 
     (; range, g, h, 𝐺, y) = proposition
 
@@ -369,7 +374,7 @@ function verify(proposition::RangeCommit{G}, proof::RangeProof{G}, verifier::Ver
 end
 
 
-function rangecommit(range::UnitRange, g::G, pk::G, value::Int, verifier::Verifier; 𝐺::G = g, α = rand(2:order(G)-1))::Simulator
+function rangecommit(range::UnitRange, g::G, pk::G, value::Int, verifier::Verifier; 𝐺::G = g, α = rand(2:order(G)-1))::Simulator where G <: Group
     
     @check minimum(range) == 0 "Not implemented"
     @check minimum(range) < value < maximum(range)
@@ -469,7 +474,7 @@ _range_proposition(n::Int, g::G, pk::G, 𝐺::G, y::G) where G <: Group = NRange
 _range_proposition(range::UnitRange, g::G, pk::G, 𝐺::G, y::G) where G <: Group = RangeCommit(range, g, pk, 𝐺, y)
 
 
-function prove(proposition::ElGamalRange{G<:Group}, verifier::Verifier, v::Int; α = rand(2:order(G) - 1))
+function prove(proposition::ElGamalRange{G}, verifier::Verifier, v::Int; α = rand(2:order(G) - 1)) where G <: Group
 
     (; range, g, pk, h, x, y) = proposition
 
@@ -549,7 +554,7 @@ function prove(proposition::PlaintextEquivalence{G}, verifier::Verifier, power::
 end
 
 
-function verify(proposition::PlaintextEquivalence{G}, proof::PlaintextEquivalenceProof{G}, verifier::Verifier)
+function verify(proposition::PlaintextEquivalence{G}, proof::PlaintextEquivalenceProof{G}, verifier::Verifier) where G <: Group
 
     (; g, pk, a, b, a′, b′) = proposition
     (; blinding_factor, blinded_ax, blinded_ax′) = proof

@@ -1,5 +1,11 @@
 module SecretSharing
 
+using CryptoGroups
+using CryptoGroups.Utils: @check
+using ..SigmaProofs.LogProofs: ChaumPedersenProof
+using ..SigmaProofs: Proposition, Proof, Verifier, Simulator
+using ..SigmaProofs.ElGamal: ElGamalRow
+
 # TODO: NEED TO DO TDD TO GET THE CODE IN WORKING STATE
 
 # Feldman's Verifiable Secret Sharing (VSS) scheme is a cryptographic protocol that extends Shamir's Secret Sharing
@@ -75,7 +81,7 @@ struct ShardingConsistency{G<:Group} <: Proof
     coeff_commitments::Vector{G}
 end
 
-function prove(proposition::ShardingSetup{G<:Group}, verifier::Verifier, coeff::Vector{BigInt})
+function prove(proposition::ShardingSetup, verifier::Verifier, coeff::Vector{BigInt}) 
 
     (; g, pk, nodes, public_keys, poly_order) = proposition
 
@@ -130,7 +136,7 @@ struct PartialDecryption{G<:Group} <: Proposition
     ad::Vector{G}
 end
 
-function prove(proposition::PartialDecrytion, verifier::Verifier, sk::BigInt)
+function prove(proposition::PartialDecryption, verifier::Verifier, sk::BigInt)
 
     (; g, pk, a, ad) = proposition
 
@@ -153,7 +159,7 @@ function verify(proposition::PartialDecryption, proof::ChaumPedersenProof, verif
 end
 
 
-function partialdecrypt(g::G, a::Vector{G}, sk::BigInt, verifier::Verifier)
+function partialdecrypt(g::G, a::Vector{G}, sk::BigInt, verifier::Verifier) where G <: Group
 
     pk = g^sk
     ad = a .^ sk
@@ -181,7 +187,7 @@ a(e::ElGamalRow{<:Group, N}) where N = ntuple(x -> x[N].a, 1:N)
 group_into_tuples(arr, N) = [Tuple(arr[i:i+N-1]) for i in 1:N:length(arr)]
 
 # merge
-function combine(setup::ShardingSetup{G}, cyphertexts::Vector{ElGamalRow{G, N}}, decryptions::Vector{PartialDecryption{G}}, proofs::Vector{ChaumPedersenProof{G}}, verifier::Verifer)::Simulator where {G <: Group, N}
+function combine(setup::ShardingSetup{G}, cyphertexts::Vector{ElGamalRow{G, N}}, decryptions::Vector{PartialDecryption{G}}, proofs::Vector{ChaumPedersenProof{G}}, verifier::Verifier)::Simulator where {G <: Group, N}
 
     #a_vec = [g, flatten(a(c) for c in cyphertexts)...]
     a_vec = [flatten(a(c) for c in cyphertexts)...]
@@ -200,7 +206,7 @@ function combine(setup::ShardingSetup{G}, cyphertexts::Vector{ElGamalRow{G, N}},
     for (prop, proof) in zip(decryptions, proofs)
         verify(prop, proof, verifier) || continue
 
-        n = findfirst(=(prop.pk), setup.public_keys)
+        n = findfirst(isequal(prop.pk), setup.public_keys)
         setup.nodes[n] in nodes && continue
 
         push!(setup.nodes[n], nodes)
@@ -225,7 +231,7 @@ function combine(setup::ShardingSetup{G}, cyphertexts::Vector{ElGamalRow{G, N}},
 end
 
 
-function verify(proposition::FullDecryption{G}, proof::FullDecryptionProof, verifier::Verifier)
+function verify(proposition::FullDecryption{G}, proof::FullDecryptionProof{G}, verifier::Verifier) where G <: Group
 
     (; g, pk, cyphertexts, plaintexts) = proposition.setup
 
