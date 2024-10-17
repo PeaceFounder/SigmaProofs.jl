@@ -6,6 +6,7 @@ using CryptoGroups: Group, PGroup, ECGroup, order, name, octet
 using ..SigmaProofs: Verifier
 using ..LogProofs: LogEquality, LogKnowledge
 using ..CommitmentShuffle: Shuffle
+using ..RangeProofs: ElGamalEnc, ElGamalBitRange, BitCommit
 using ..Serializer: Serializer, Path
 using ..Parser
 
@@ -15,8 +16,6 @@ import ..SigmaProofs: challenge, generator_basis
 # functions. The Verificatum specification is only concrete with respect to ShuffleProofs, hence, implementation of verifier here is just an prelimenary imitation and would likelly be reviewed in the future.
 
 include("GeneratorBasis.jl") # exports only a single function
-#include("io.jl")
-
 
 using Base: @kwdef
 
@@ -149,23 +148,59 @@ function challenge(verifier::ProtocolSpec{G}, proposition::Shuffle{G}, A::G) whe
     return rand(prg, 2:order(G) - 1, length(𝐂))
 end
 
+function challenge(verifier::ProtocolSpec{G}, proposition::ElGamalBitRange{G}, a₁::G, b₁::G, a₂::G, b₂::G) where G <: Group
+    
+    (; g, h, 𝐺, x, y) = proposition
+    
+    ρ = ro_prefix(verifier)
+
+    tree = Tree((g, h, 𝐺, x, y, a₁, b₁, a₂, b₂))
+    
+    prg = PRG(verifier.prghash, [ρ..., encode(tree)...])
+
+    return rand(prg, 2:order(G) - 1)
+end
+
+function challenge(verifier::ProtocolSpec{G}, proposition::BitCommit{G}, b₁::G, b₂::G) where G <: Group
+    
+    (; g, h, y) = proposition
+    
+    ρ = ro_prefix(verifier)
+
+    tree = Tree((g, h, y, b₁, b₂))
+    
+    prg = PRG(verifier.prghash, [ρ..., encode(tree)...])
+
+    return rand(prg, 2:order(G) - 1)
+end
+
+function challenge(verifier::ProtocolSpec{G}, proposition::ElGamalEnc{G}, t₁::G, t₂::G) where G <: Group
+
+    (; g, pk, h, a, b) = proposition
+
+    ρ = ro_prefix(verifier)
+
+    tree = Tree((g, pk, h, a, b, t₁, t₂))
+
+    prg = PRG(verifier.prghash, [ρ..., encode(tree)...])
+
+    return rand(prg, 2:order(G) - 1)
+end
 
 leaf(x::String) = Parser.encode(Parser.Leaf(x))
 
-function gen_verificatum_basis(::Type{G}, prghash::HashSpec, rohash::HashSpec, N::Integer; nr::Integer = 0, ρ = UInt8[], d = [ρ..., leaf("generators")...]) where G <: Group
+function gen_verificatum_basis(::Type{G}, prghash::HashSpec, rohash::HashSpec, N::Integer; nr::Integer = 0, ρ = UInt8[], d = [ρ..., leaf("generators")...], suffix = UInt8[]) where G <: Group
 
     roprg = ROPRG(d, rohash, prghash)
-    prg = roprg(UInt8[]) # d is a better argument than x
+    prg = roprg(suffix)
 
-    # TODO
-    #return rand(prg, G, N; nr)
     return GeneratorBasis.generator_basis(prg, G, N; nr)
 end
 
 
-function generator_basis(verifier::ProtocolSpec{G}, ::Type{G}, N::Integer; ρ = ro_prefix(verifier)) where G <: Group
+function generator_basis(verifier::ProtocolSpec{G}, ::Type{G}, N::Integer; ρ = ro_prefix(verifier), suffix = UInt8[]) where G <: Group
     (; g, nr, rohash, prghash) = verifier
-    return gen_verificatum_basis(G, prghash, rohash, N; nr, ρ)
+    return gen_verificatum_basis(G, prghash, rohash, N; nr, ρ, suffix)
 end
 
 
@@ -236,9 +271,6 @@ function Serializer.load(::Type{ProtocolSpec}, path::Path; auxsid = "default")
     return ProtocolSpec(; g, nr, nv, ne, prghash, rohash, version, sid, auxsid)
 end
 
-#Serializer.load(::Type{ProtocolSpec}, path::Path; auxsid = "default") = load(ProtocolSpec, 
-
 Serializer.treespec(::Type{<:ProtocolSpec}) = "ProtInfo.xml"
-
 
 end

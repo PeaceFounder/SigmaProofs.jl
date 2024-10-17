@@ -86,6 +86,7 @@ function generator_basis(prg::PRG, ::Type{G}, N::Integer; nr::Integer = 0) where
     return G.(g_vec)
 end
 
-# export generator_basis
+generator_basis(prg::PRG, ::Type{G}; nr::Integer = 0) where G <: Group = generator_basis(prg, G, 1; nr)[1]
+
 
 end

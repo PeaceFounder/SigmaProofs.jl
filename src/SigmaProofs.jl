@@ -2,7 +2,7 @@ module SigmaProofs
 
 using Random: RandomDevice
 using CryptoPRG: HashSpec
-using CryptoPRG.Verificatum: ROPRG
+using CryptoPRG.Verificatum: ROPRG, PRG
 
 include("ElGamal.jl")
 include("Parser.jl")
@@ -50,6 +50,8 @@ function gen_roprg(ρ::AbstractVector{UInt8})
 end
 
 gen_roprg() = gen_roprg(rand(RandomDevice(), UInt8, 32))
+
+gen_roprg(prg::PRG) = gen_roprg(prg.s)
 
 
 include("Serializer.jl")

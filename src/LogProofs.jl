@@ -114,17 +114,15 @@ function exponentiate(g::Vector{<:Group}, power::Integer)::LogEquality
     return LogEquality(g, y)
 end
 
-function exponentiate(g::Vector{<:Group}, power::Integer, verifier::Verifier)::Simulator
+function exponentiate(g::Vector{<:Group}, power::Integer, verifier::Verifier; roprg = gen_roprg())::Simulator
 
     proposition = exponentiate(g, power)
-    proof = prove(proposition, verifier, power)
+    proof = prove(proposition, verifier, power; roprg)
 
     return Simulator(proposition, proof, verifier)
 end
 
 
-
-# ToDo
 function Serializer.save(proof::ChaumPedersenProof, dir::Path; prefix = "ChaumPedersen") 
 
     (; commitment, response) = proof

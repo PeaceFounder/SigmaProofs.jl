@@ -38,8 +38,17 @@ end
     include("shuffle.jl")
 end
 
+@safetestset "Testing Range Proofs" begin
+    include("ranges.jl")
+end
+
+@safetestset "Example Vickrey Auction" begin
+    include("../examples/auctions.jl")
+end
+
 @safetestset "Testing Serialization" begin
     include("serializer.jl")
 end
+
 
 
