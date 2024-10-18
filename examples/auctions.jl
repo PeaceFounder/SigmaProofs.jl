@@ -55,7 +55,7 @@ bids = [C_A, C_B, C_C, C_D]
 𝛃 = [β_A, β_B, β_C, β_D]
 
 # Run the Vickrey auction
-simulator = vickrey_auction(bids, g, h, 𝛃, verifier)
+simulator = vickrey_auction(bids, g, h, 𝛃, verifier) 
 
 # Extract the proposition (auction results) from the simulator
 (; proposition) = simulator
