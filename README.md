@@ -77,7 +77,7 @@ The latter division can be used as plaintext equivalence test for the package. T
 
 ```julia
 using CryptoGroups
-using SigmaProofs.ElGamal: Enc, ElGamalRow
+using SigmaProofs.ElGamal: Enc
 using SigmaProofs.DecryptionProofs: exponentiate, verify
 
 g = @ECGroup{P_192}()
@@ -89,8 +89,8 @@ pk = g^sk
 
 encryptor = Enc(pk, g)
 
-plaintexts = [g^4, g^2, g^3]
-cyphertexts = encryptor(plaintexts, rand(2:order(g)-1, length(plaintexts))) .|> ElGamalRow
+plaintexts = [g^4, g^2, g^3] .|> tuple
+cyphertexts = encryptor(plaintexts, rand(2:order(g)-1, length(plaintexts)))
 
 simulator = decrypt(g, cyphertexts, sk, verifier)
 
@@ -126,7 +126,21 @@ The last piece of puzzle is range proof use in homomorphic tallying methods usin
 
 ## SecretSharing
 
-Verifiable secret sharing. Comming soon...
+The `SigmaProofs.SecretSharing` module provides an implementation of the Feldman Verifiable Secret Sharing (VSS) scheme, a cryptographic protocol that extends Shamir's Secret Sharing with a verification mechanism.
+
+The Feldman VSS scheme allows a dealer to distribute shares of a secret among participants in a way that enables the participants to verify the consistency of their shares without revealing the secret. This is achieved by the dealer publishing commitments to the coefficients of the polynomial used to generate the shares.
+
+The module includes the following key functionality:
+
+1. **Secret Sharing Setup**: The `sharding_setup(g::G, nodes::Vector{G}, coeff::Vector{G}, ::Verifier)::Simulator{ShardingSetup}` function generates the necessary components for the secret sharing scheme, including the dealer's public key, the participants' public keys, and the commitments to the polynomial coefficients.
+
+2. **Share Verification**: The `verify` function allows participants to verify the consistency of their shares by checking the published commitments.
+
+3. **Secret Reconstruction**: The `merge_exponentiations(::Simulator{ShardingSetup}, ::Vector{G}, ::Vector{Exponentiation{G}}, proof::Vector{ChaumPedersenProof{G}})::Simulator{Exponentiation}` and `merge_decryptions(::Simulator{ShardingSetup}, ::Vector{<:ElGamalRow{G}}, ::Vector{Exponentiation{G}}, proof::Vector{ChaumPedersenProof{G}})::Simulator{Decryption}` functions enable the reconstruction of the secret by combining a threshold number of shares using Lagrange interpolation.
+
+4. **Utility Functions**: The module provides helper functions for polynomial evaluation (`evaluate_poly`) and Lagrange coefficient computation (`lagrange_coef`), which are essential for both the sharing and reconstruction processes.
+
+The module also includes support for generating proofs and verifying the consistency of the scheme using the `SigmaProofs` framework. For more detailed use see `test/secretsharing.jl` file.
 
 ## CommitmentShuffle
 

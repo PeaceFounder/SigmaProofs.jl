@@ -2,11 +2,11 @@ module SecretSharing
 
 using CryptoGroups
 using CryptoGroups.Utils: @check
-using ..SigmaProofs.LogProofs: ChaumPedersenProof
+using ..SigmaProofs.LogProofs: ChaumPedersenProof, Exponentiation
 using ..SigmaProofs: Proposition, Proof, Verifier, Simulator
-using ..SigmaProofs.ElGamal: ElGamalRow
-
-# TODO: NEED TO DO TDD TO GET THE CODE IN WORKING STATE
+using ..SigmaProofs.ElGamal: ElGamalRow, a, b, width
+import ..SigmaProofs: proof_type, prove, verify
+import ..SigmaProofs.DecryptionProofs: Decryption
 
 # Feldman's Verifiable Secret Sharing (VSS) scheme is a cryptographic protocol that extends Shamir's Secret Sharing
 # with a verification mechanism. It allows a dealer to distribute shares of a secret among participants in a way
@@ -39,7 +39,7 @@ using ..SigmaProofs.ElGamal: ElGamalRow
 # In 28th Annual Symposium on Foundations of Computer Science (sfcs 1987) (pp. 427-438). IEEE.
 # https://www.cs.umd.edu/~gasarch/TOPICS/secretsharing/feldmanVSS.pdf
 
-function evaluate_poly(x::BigInt, poly::Vector{BigInt}, modulus::BigInt) 
+function evaluate_poly(x::Integer, coeff::Vector{<:Integer}, modulus::Integer) 
 
     s = BigInt(0)
 
@@ -49,8 +49,10 @@ function evaluate_poly(x::BigInt, poly::Vector{BigInt}, modulus::BigInt)
 
     return s
 end
+ 
+evaluate_poly(nodes::Vector{<:Integer}, coeff::Vector{<:Integer}, modulus::Integer) = [evaluate_poly(ni, coeff, modulus) for ni in nodes]
 
-function lagrange_coef(i::Int, x::Vector{BigInt}, modulus::BigInt)
+function lagrange_coef(i::Integer, x::Vector{<:Integer}, modulus::Integer)
 
     l = BigInt(1)
 
@@ -58,22 +60,20 @@ function lagrange_coef(i::Int, x::Vector{BigInt}, modulus::BigInt)
 
         j == i && continue
 
-        l *= x[j] * modinv(x[j] - x[i], modulus) % modulus
+        l *= x[j] * invmod(x[j] - x[i], modulus) % modulus
         
     end
 
     return l
 end
 
-lagrange_coefs(nodes::Vector{BigInt}, modulus::BigInt) = [lagrange_coef(i, nodes, modulus) for i in 1:length(nodes)]
+lagrange_coef(nodes::Vector{<:Integer}, modulus::Integer) = [lagrange_coef(i, nodes, modulus) for i in 1:length(nodes)]
 
-# The blinding is completelly unnecessary here as the secret space is large. It could be an interesting addition for a situation
-# where 
 struct ShardingSetup{G<:Group} <: Proposition
     g::G
     pk::G
     poly_order::Int
-    nodes::Vector{BigInt}
+    nodes::Vector{<:Integer}
     public_keys::Vector{G} # g^d_i
 end
 
@@ -81,7 +81,9 @@ struct ShardingConsistency{G<:Group} <: Proof
     coeff_commitments::Vector{G}
 end
 
-function prove(proposition::ShardingSetup, verifier::Verifier, coeff::Vector{BigInt}) 
+proof_type(::Type{<:ShardingSetup{G}}) where G <: Group = ShardingConsistency{G}
+
+function prove(proposition::ShardingSetup, verifier::Verifier, coeff::Vector{<:Integer}) 
 
     (; g, pk, nodes, public_keys, poly_order) = proposition
 
@@ -95,27 +97,32 @@ end
 
 function verify(proposition::ShardingSetup{G}, proof::ShardingConsistency{G}, verifier::Verifier) where G <: Group
 
-    (; g, h, pk, nodes, public_keys, poly_order) = proposition
+    (; g, pk, poly_order, nodes, public_keys) = proposition
+
+    any(>(0), nodes) || return false
+    any(<(order(G)), nodes) || return false
+    length(unique(nodes)) == length(nodes) || return false
+    
+    first(proof.coeff_commitments) == pk || return false
 
     for (xi, pki) in zip(nodes, public_keys)
-        prod(ci^(x^i) for (ci, i) in zip(proof.coeff_commitments, 0:poly_order)) == pki || return false
+        prod(ci^(xi^i) for (ci, i) in zip(proof.coeff_commitments, 0:poly_order)) == pki || return false
     end
 
     return true
 end
 
 
-function sharding_setup(g::G, nodes::Vector{BigInt}, coeff::Vector{BigInt}, verifier::Verifier) where G <: Group
-
-    @check !any(iszero, nodes) "A node can't be zero" 
-    @check !any(>(0), nodes) "A node must be positive" 
+function sharding_setup(g::G, nodes::Vector{<:Integer}, coeff::Vector{<:Integer}, verifier::Verifier;
+                        d_vec = evaluate_poly.(nodes, coeff, order(G))
+                        ) where G <: Group
+  
+    @check any(<(order(G)), nodes) && any(>(0), nodes) "A node must be withing interval `0 < node < order(G)`" 
     @check length(unique(nodes)) == length(nodes) "Nodes must be unique"
 
     pk = g^first(coeff) # first coefficient is a constant factor
 
     poly_order = length(coeff) - 1
-
-    d_vec = evaluate_poly.(nodes, coeff, order(G))
     
     public_keys = g .^ d_vec
 
@@ -126,125 +133,116 @@ function sharding_setup(g::G, nodes::Vector{BigInt}, coeff::Vector{BigInt}, veri
     return Simulator(proposition, proof, verifier)
 end
 
-
-### Threshold decryption 
-
-struct PartialDecryption{G<:Group} <: Proposition
-    g::G
-    pk::G # The public key must be one in the list of public_keys of sharding_setup
-    a::Vector{G}
-    ad::Vector{G}
-end
-
-function prove(proposition::PartialDecryption, verifier::Verifier, sk::BigInt)
-
-    (; g, pk, a, ad) = proposition
-
-    g_vec = [g, a...]
-    y_vec = [pk, ad...]
-
-    proof = prove(LogEquality(g_vec, y_vec), verifier, sk)
-
-    return proof
-end
-
-function verify(proposition::PartialDecryption, proof::ChaumPedersenProof, verifier::Verifier)
-
-    (; g, pk, a, ad) = proposition
-
-    g_vec = [g, a...]
-    y_vec = [pk, ad...]
-
-    return verify(LogEquality(g_vec, y_vec), proof, verifier)
-end
-
-
-function partialdecrypt(g::G, a::Vector{G}, sk::BigInt, verifier::Verifier) where G <: Group
-
-    pk = g^sk
-    ad = a .^ sk
-
-    proposition = PartialDecryption(g, ok, a, ad)
-    proof = prove(proposition, verifier, sk)
-
-    return Simulator(proposition, proof, verifier)
-end
-
-struct FullDecryption{G<:Group, N} <: Proposition
+struct ThresholdExponentiation{G <: Group} <: Proof
     setup::ShardingSetup{G}
-    cyphertexts::Vector{ElGamalRow{G, N}}
-    plaintexts::Vector{NTuple{N, G}}
+    consistency::ShardingConsistency{G}
+    node_indices::Vector{Int}
+    partials::Vector{Vector{G}}
+    proofs::Vector{ChaumPedersenProof{G}}
 end
 
-struct FullDecryptionProof{G<:Group} <: Proof
-    partial_decryptions::Vector{Vector{G}}
-    decryption_proofs::Vector{ChaumPedersenProof{G}}
-end
+Base.isvalid(::Type{<:ThresholdExponentiation{G}}, proposition::Exponentiation{G}) where G <: Group = true
 
+function isbinding(setup::ShardingSetup{G}, elements::Vector{G}, proposition::Exponentiation{G}) where G <: Group
 
-a(e::ElGamalRow{<:Group, N}) where N = ntuple(x -> x[N].a, 1:N)
+    proposition.g == setup.g || return false
+    proposition.pk in setup.public_keys || return false
+    proposition.x == elements || return false
+    
+    return true
+end 
 
-group_into_tuples(arr, N) = [Tuple(arr[i:i+N-1]) for i in 1:N:length(arr)]
+function merge_exponentiations(setup::Simulator{ShardingSetup{G}}, elements::Vector{G}, exponentiations::Vector{Exponentiation{G}}, proofs::Vector{ChaumPedersenProof{G}})::Simulator where G <: Group
 
-# merge
-function combine(setup::ShardingSetup{G}, cyphertexts::Vector{ElGamalRow{G, N}}, decryptions::Vector{PartialDecryption{G}}, proofs::Vector{ChaumPedersenProof{G}}, verifier::Verifier)::Simulator where {G <: Group, N}
+    (; public_keys, poly_order, g, pk, nodes) = setup.proposition
 
-    #a_vec = [g, flatten(a(c) for c in cyphertexts)...]
-    a_vec = [flatten(a(c) for c in cyphertexts)...]
-    b_vec = [flatten(b(c) for c in cyphertexts)...]
-
-    for dec in decryptions
-        decryption.g == setup.g || return false
-        decrytpion.pk in setup.public_keys || return false # 
-        a_vec == dec.a || return false
-    end
-
-    nodes = BigInt[]
+    node_indices = Int[]
     partials = Vector{G}[]    
 
     # We could skip the wrong proofs here
-    for (prop, proof) in zip(decryptions, proofs)
-        verify(prop, proof, verifier) || continue
+    for (prop, proof) in zip(exponentiations, proofs)
 
-        n = findfirst(isequal(prop.pk), setup.public_keys)
-        setup.nodes[n] in nodes && continue
+        isbinding(setup.proposition, elements, prop)
+        
+        n = findfirst(isequal(prop.pk), public_keys)
+        n in node_indices && continue # the same decryption
 
-        push!(setup.nodes[n], nodes)
-        push!(partials, prop.ad) # this adds a pointer to the list thus it is efficient
+        push!(node_indices, n)
+        push!(partials, prop.y) # this adds a pointer to the list thus it is efficient
 
-        length(nodes) == setup.poly_order && break
+        length(node_indices) == poly_order + 1 && break # may be better, we may also skip this one
     end
 
-    @check length(nodes) == setup.poly_order "Not enough valid shares decrypted to reconstruct the proof"
+    @check length(node_indices) == poly_order + 1 "Not enough valid shares for full exponentiation"
 
-    l_vec = lagrange_coefs(nodes, modulus)
+    l_vec = lagrange_coef(nodes[node_indices], order(G)) 
+    full_exponentiation = mapreduce(.^, .*, partials, l_vec)
+    proposition = Exponentiation(g, pk, elements, full_exponentiation)
 
-    plaintext_vec = prod(Pi .^ li for (Pi, li) in zip(partials, l_vec)) .* b_vec
+    proof = ThresholdExponentiation(setup.proposition, setup.proof, node_indices, partials, proofs)
 
-    plaintexts = group_into_tuples(plaintext_vec, N)
-
-    proposition = FullDecryption(setup, cyphertexts, plaintexts)
-
-    proof = FullDecryptionProof(decryptions, proofs)
-
-    return Simulator(proposition, proof, verifier)
+    return Simulator(proposition, proof, setup.verifier)
 end
 
+# Note that the proofs are verified in advance hence one should not verify this seperatelly
+function verify(proposition::Exponentiation{G}, proof::ThresholdExponentiation{G}, verifier::Verifier) where G <: Group
 
-function verify(proposition::FullDecryption{G}, proof::FullDecryptionProof{G}, verifier::Verifier) where G <: Group
+    (; setup, node_indices, partials, proofs) = proof
+    (; g, public_keys, nodes) = setup
+    (; x) = proposition
 
-    (; g, pk, cyphertexts, plaintexts) = proposition.setup
+    verify(proof.setup, proof.consistency, verifier) || return false
 
-    # We could run the combine method
+    l_vec = lagrange_coef(nodes[node_indices], order(G))
+    full_exponentiation = mapreduce(.^, .*, partials, l_vec)
+    full_exponentiation == proposition.y || return false
 
-    a_vec = [g, flatten(a(c) for c in cyphertexts)...]
+    for (i, partial, proofi) in zip(node_indices, proof.partials, proof.proofs)
+
+        pk = public_keys[i]
+
+        propositioni = Exponentiation(g, pk, x, partial)
+
+        verify(propositioni, proofi, verifier) || return false
+    end
+
+    return true
+end
+
+Base.isvalid(::Type{<:ThresholdExponentiation{G}}, proposition::Decryption{G}) where G <: Group = true
+
+group_into_tuples(arr, N) = [Tuple(arr[i:i+N-1]) for i in 1:N:length(arr)]
+
+function merge_decryptions(setup::Simulator{ShardingSetup{G}}, ciphertexts::Vector{<:ElGamalRow{G}}, exponentiations::Vector{Exponentiation{G}}, proofs::Vector{ChaumPedersenProof{G}})::Simulator where G <: Group
+
+    a_vec = Iterators.flatten(a(ei) for ei in ciphertexts) #|> collect 
+    b_vec = Iterators.flatten(b(ei) for ei in ciphertexts) #|> collect 
+
+    simulator = merge_exponentiations(setup, collect(a_vec), exponentiations, proofs)
+
+    (; y, g, pk) = simulator.proposition
     
-    propositions = [PartialDecryption(g, pk, a_vec, ad_vec) for ad_vec in proof.partial_decryptions]
+    m_vec = b_vec ./ y
+    
+    plaintexts = group_into_tuples(m_vec, width(ciphertexts))
 
-    simulator = combine(proposition.setup, cyphertexts, propositions, proof.decryption_proofs, verifier)
+    proposition = Decryption(g, pk, ciphertexts, plaintexts)
 
-    return simulator.proposition.plaintexts == plaintexts
+    return Simulator(proposition, simulator.proof, setup.verifier)
 end
 
+function verify(proposition::Decryption{G}, proof::ThresholdExponentiation{G}, verifier::Verifier) where G <: Group
+
+    (; g, pk, ciphertexts, plaintexts) = proposition
+
+    a_vec = Iterators.flatten(a(ei) for ei in ciphertexts)
+    b_vec = Iterators.flatten(b(ei) for ei in ciphertexts)
+    
+    m_vec = Iterators.flatten(plaintexts)
+
+    ax_vec = b_vec ./ m_vec
+
+    return verify(Exponentiation(g, pk, collect(a_vec), ax_vec), proof, verifier)
+end
 
 end

@@ -34,6 +34,10 @@ end
     include("decryption.jl")
 end
 
+@safetestset "Testing Secret Sharing" begin
+    include("secretsharing.jl")
+end
+
 @safetestset "Testing Commitment Shuffle" begin
     include("shuffle.jl")
 end

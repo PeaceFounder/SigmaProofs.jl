@@ -43,6 +43,9 @@ ElGamalRow(row::AbstractVector{<:ElGamalElement{G}}) where {G <: Group} = conver
 width(::Type{ElGamalRow{<:Group, N}}) where N = N
 width(::Type{<:AbstractVector{<:ElGamalRow{<:Group, N}}}) where N = N
 
+a(e::ElGamalRow{<:Group, N}) where N = ntuple(n -> e[n].a, N)
+b(e::ElGamalRow{<:Group, N}) where N = ntuple(n -> e[n].b, N)
+
 Base.convert(::Type{ElGamalRow{G, N}}, row::NTuple{N, G}) where {N, G<:Group} = ElGamalRow(tuple([ElGamalElement(mi) for mi in row]...))
 Base.convert(::Type{ElGamalRow{G, 1}}, element::ElGamalElement{G}) where G <: Group = ElGamalRow((element,))
 Base.convert(::Type{ElGamalRow{G}}, row::AbstractVector{<:ElGamalElement{G}}) where G <: Group = ElGamalRow(tuple(row...))

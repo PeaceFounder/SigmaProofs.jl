@@ -492,7 +492,7 @@ end
 
 
 ### Now let's implement plaintext equivalence proofs
-# In case one can ensure that the input cyphertexts are correct ElGamal encryptions this is unnecessary as
+# In case one can ensure that the input ciphertexts are correct ElGamal encryptions this is unnecessary as
 # one then simply proves `dec(e1/e2) = 1`. To perform this proof one does not need to know the blinding factors, but the knowledge
 # of the exponent of encrypted value is necessary. Depending of available knowledge this proposition can have multiple proof types.
 struct PlaintextEquivalence{G<:Group} <: Proposition

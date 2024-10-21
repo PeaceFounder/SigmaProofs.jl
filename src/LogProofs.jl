@@ -72,9 +72,6 @@ proof_type(::Type{LogEquality{G}}) where G <: Group = ChaumPedersenProof{G}
 
 Base.:(==)(x::T, y::T) where T <: ChaumPedersenProof = x.commitment == y.commitment && x.response == y.response
 
-
-
-
 function prove(proposition::LogEquality{G}, verifier::Verifier, power::Integer; roprg = gen_roprg())::ChaumPedersenProof where G <: Group
 
     (; g, y) = proposition
@@ -120,6 +117,51 @@ function exponentiate(g::Vector{<:Group}, power::Integer, verifier::Verifier; ro
     proof = prove(proposition, verifier, power; roprg)
 
     return Simulator(proposition, proof, verifier)
+end
+
+
+struct Exponentiation{G <: Group} <: Proposition
+    g::G
+    pk::G
+    x::Vector{G}
+    y::Vector{G}
+end
+
+proof_type(::Type{<:Exponentiation{G}}) where G <: Group = ChaumPedersenProof{G}
+
+
+function exponentiate(g::G, x::Vector{G}, power::Integer)::Exponentiation where G <: Group
+
+    pk = g ^ power
+    y = x .^ power
+
+    return Exponentiation(g, pk, x, y)
+end
+
+
+function exponentiate(g::G, x::Vector{G}, power::Integer, verifier::Verifier; roprg = gen_roprg()) where G <: Group
+
+    proposition = exponentiate(g, x, power)
+    proof = prove(proposition, verifier, power; roprg)
+
+    return Simulator(proposition, proof, verifier)
+end
+
+
+function prove(proposition::Exponentiation, verifier::Verifier, power::Integer; roprg = gen_roprg())
+
+    g_vec = [proposition.g, proposition.x...]
+    y_vec = [proposition.pk, proposition.y...] 
+
+    return prove(LogEquality(g_vec, y_vec), verifier, power)
+end
+
+function verify(proposition::Exponentiation{G}, proof::ChaumPedersenProof{G}, verifier::Verifier) where G <: Group
+
+    g_vec = [proposition.g, proposition.x...]
+    y_vec = [proposition.pk, proposition.y...]
+
+    return verify(LogEquality(g_vec, y_vec), proof, verifier)
 end
 
 

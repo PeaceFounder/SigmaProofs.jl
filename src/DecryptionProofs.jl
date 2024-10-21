@@ -15,39 +15,39 @@ b(e::ElGamalRow{<:Group, N}) where N = ntuple(n -> e[n].b, N)
 struct Decryption{G <: Group, N} <: Proposition
     g::G
     pk::G
-    cyphertexts::Vector{ElGamalRow{G, N}}
+    ciphertexts::Vector{ElGamalRow{G, N}}
     plaintexts::Vector{NTuple{N, G}}
 end
 
 proof_type(::Type{Decryption}) = ChaumPedersenProof
 proof_type(::Type{<:Decryption{G}}) where G <: Group = ChaumPedersenProof{G}
 
-Base.:(==)(x::T, y::T) where T <: Decryption = x.g == y.g && x.pk == y.pk && x.cyphertexts == y.cyphertexts && x.plaintexts == y.plaintexts
+Base.:(==)(x::T, y::T) where T <: Decryption = x.g == y.g && x.pk == y.pk && x.ciphertexts == y.ciphertexts && x.plaintexts == y.plaintexts
 
 function Base.permute!(decr::Decryption, perm::AbstractVector{<:Integer})
     
-    permute!(decr.cyphertexts, perm)
+    permute!(decr.ciphertexts, perm)
     permute!(decr.plaintexts, perm)
 
     return
 end
 
-verify(proposition::Decryption, secret::Integer) = decrypt(proposition.g, proposition.cyphertexts, secret) == proposition
+verify(proposition::Decryption, secret::Integer) = decrypt(proposition.g, proposition.ciphertexts, secret) == proposition
 
-axinv(proposition::Decryption) = (mi ./ b(ei) for (ei, mi) in zip(proposition.cyphertexts, proposition.plaintexts))
+axinv(proposition::Decryption) = (mi ./ b(ei) for (ei, mi) in zip(proposition.ciphertexts, proposition.plaintexts))
 axinv(e::Vector{<:ElGamalRow}, secret::Integer) = (a(ei) .^ (-secret) for ei in e)
 
-function decrypt(g::G, cyphertexts::Vector{<:ElGamalRow{G}}, secret::Integer; axinv = axinv(cyphertexts, secret)) where G <: Group
+function decrypt(g::G, ciphertexts::Vector{<:ElGamalRow{G}}, secret::Integer; axinv = axinv(ciphertexts, secret)) where G <: Group
 
-    plaintexts = [b(ci) .* axi for (ci, axi) in zip(cyphertexts, axinv)]
+    plaintexts = [b(ci) .* axi for (ci, axi) in zip(ciphertexts, axinv)]
     pk = g^secret
 
-    return Decryption(g, pk, cyphertexts, plaintexts)
+    return Decryption(g, pk, ciphertexts, plaintexts)
 end
 
 function prove(proposition::Decryption{G}, verifier::Verifier, secret::Integer; axinv = axinv(proposition)) where G <: Group
 
-    g_vec = [proposition.g, flatten(a(c) for c in proposition.cyphertexts)...]
+    g_vec = [proposition.g, flatten(a(c) for c in proposition.ciphertexts)...]
     y_vec = [inv(proposition.pk), flatten(axinv)...]
     
     log_proposition = LogEquality(g_vec, y_vec)
@@ -57,9 +57,9 @@ function prove(proposition::Decryption{G}, verifier::Verifier, secret::Integer; 
     return log_proof
 end
 
-function decrypt(g::G, cyphertexts::Vector{<:ElGamalRow{G}}, secret::Integer, verifier::Verifier; axinv = axinv(cyphertexts, secret)) where G <: Group
+function decrypt(g::G, ciphertexts::Vector{<:ElGamalRow{G}}, secret::Integer, verifier::Verifier; axinv = axinv(ciphertexts, secret)) where G <: Group
 
-    proposition = decrypt(g, cyphertexts, secret; axinv)
+    proposition = decrypt(g, ciphertexts, secret; axinv)
     proof = prove(proposition, verifier, secret; axinv)
 
     return Simulator(proposition, proof, verifier)
@@ -68,7 +68,7 @@ end
 
 function verify(proposition::Decryption, proof::ChaumPedersenProof, verifier::Verifier)
 
-    g_vec = [proposition.g, flatten(a(c) for c in proposition.cyphertexts)...]
+    g_vec = [proposition.g, flatten(a(c) for c in proposition.ciphertexts)...]
     y_vec = [inv(proposition.pk), flatten(axinv(proposition))...]
 
     log_proposition = LogEquality(g_vec, y_vec)
@@ -83,38 +83,38 @@ end
 struct DecryptionInv{G <: Group, N} <: Proposition
     g::G
     pk::G
-    cyphertexts::Vector{ElGamalRow{G, N}}
+    ciphertexts::Vector{ElGamalRow{G, N}}
     trackers::Vector{NTuple{N, G}}
 end
 
 proof_type(::Type{DecryptionInv}) = ChaumPedersenProof
 proof_type(::Type{<:DecryptionInv{G}}) where G <: Group = ChaumPedersenProof{G}
 
-Base.:(==)(x::T, y::T) where T <: DecryptionInv = x.g == y.g && x.pk == y.pk && x.cyphertexts == y.cyphertexts && x.trackers == y.trackers
+Base.:(==)(x::T, y::T) where T <: DecryptionInv = x.g == y.g && x.pk == y.pk && x.ciphertexts == y.ciphertexts && x.trackers == y.trackers
 
 function Base.permute!(decr::DecryptionInv, perm::AbstractVector{<:Integer})
     
-    permute!(decr.cyphertexts, perm)
+    permute!(decr.ciphertexts, perm)
     permute!(decr.trackers, perm)
 
     return
 end
 
-ax(proposition::DecryptionInv) = (ti .* b(ei) for (ei, ti) in zip(proposition.cyphertexts, proposition.trackers))
+ax(proposition::DecryptionInv) = (ti .* b(ei) for (ei, ti) in zip(proposition.ciphertexts, proposition.trackers))
 ax(e::Vector{<:ElGamalRow}, secret::Integer) = (a(ei) .^ secret for ei in e)
 
-function decryptinv(g::G, cyphertexts::Vector{<:ElGamalRow{G}}, secret::Integer; ax = ax(cyphertexts, secret)) where G <: Group
+function decryptinv(g::G, ciphertexts::Vector{<:ElGamalRow{G}}, secret::Integer; ax = ax(ciphertexts, secret)) where G <: Group
 
-    trackers = [axi ./ b(ci) for (ci, axi) in zip(cyphertexts, ax)]
+    trackers = [axi ./ b(ci) for (ci, axi) in zip(ciphertexts, ax)]
     pk = g^secret
 
-    return DecryptionInv(g, pk, cyphertexts, trackers)
+    return DecryptionInv(g, pk, ciphertexts, trackers)
 end
 
 # The same actually
 function prove(proposition::DecryptionInv{G}, verifier::Verifier, secret::Integer; ax = ax(proposition)) where G <: Group
 
-    g_vec = [proposition.g, flatten(a(c) for c in proposition.cyphertexts)...]
+    g_vec = [proposition.g, flatten(a(c) for c in proposition.ciphertexts)...]
     y_vec = [proposition.pk, flatten(ax)...]
     
     log_proposition = LogEquality(g_vec, y_vec)
@@ -125,20 +125,20 @@ function prove(proposition::DecryptionInv{G}, verifier::Verifier, secret::Intege
 end
 
 
-function decryptinv(g::G, cyphertexts::Vector{<:ElGamalRow{G}}, secret::Integer, verifier::Verifier; ax = ax(cyphertexts, secret)) where G <: Group
+function decryptinv(g::G, ciphertexts::Vector{<:ElGamalRow{G}}, secret::Integer, verifier::Verifier; ax = ax(ciphertexts, secret)) where G <: Group
 
-    proposition = decryptinv(g, cyphertexts, secret; ax)
+    proposition = decryptinv(g, ciphertexts, secret; ax)
 
     proof = prove(proposition, verifier, secret; ax)
 
     return Simulator(proposition, proof, verifier)
 end
 
-verify(proposition::DecryptionInv, secret::Integer) = decryptinv(proposition.g, proposition.cyphertexts, secret) == proposition
+verify(proposition::DecryptionInv, secret::Integer) = decryptinv(proposition.g, proposition.ciphertexts, secret) == proposition
 
 function verify(proposition::DecryptionInv, proof::ChaumPedersenProof, verifier::Verifier)
 
-    g_vec = [proposition.g, flatten(a(c) for c in proposition.cyphertexts)...]
+    g_vec = [proposition.g, flatten(a(c) for c in proposition.ciphertexts)...]
     y_vec = [proposition.pk, flatten(ax(proposition))...]
 
     log_proposition = LogEquality(g_vec, y_vec)
@@ -149,12 +149,12 @@ end
 
 function Serializer.save(proposition::Decryption, dir::Path) 
     
-    (; g, pk, cyphertexts, plaintexts) = proposition
+    (; g, pk, ciphertexts, plaintexts) = proposition
 
     pbkey_tree = Parser.marshal_publickey(pk, g)
     write(joinpath(dir, "publicKey.bt"), pbkey_tree)
 
-    write(joinpath(dir, "Ciphertexts.bt"), Tree(cyphertexts))
+    write(joinpath(dir, "Ciphertexts.bt"), Tree(ciphertexts))
     write(joinpath(dir, "Decryption.bt"), Tree(plaintexts)) # Decryption could be renamed to Plaintexts
 
     return
@@ -169,15 +169,15 @@ function Serializer.load(::Type{Decryption}, basedir::Path)
 
     G = typeof(g)
 
-    cyphertexts_tree = Parser.decode(read(joinpath(basedir, "Ciphertexts.bt")))
+    ciphertexts_tree = Parser.decode(read(joinpath(basedir, "Ciphertexts.bt")))
     plaintexts_tree = Parser.decode(read(joinpath(basedir, "Decryption.bt")))
 
     N = 1 # ToDo: extract that from the tree
 
-    cyphertexts = convert(Vector{ElGamalRow{G, N}}, cyphertexts_tree)
+    ciphertexts = convert(Vector{ElGamalRow{G, N}}, ciphertexts_tree)
     plaintexts = convert(Vector{NTuple{N, G}}, plaintexts_tree)
 
-    return Decryption(g, pk, cyphertexts, plaintexts)
+    return Decryption(g, pk, ciphertexts, plaintexts)
 end
 
 Serializer.load(::Type{P}, ::Type{Decryption}, path::Path) where P <: ChaumPedersenProof = Serializer.load(P, path; prefix="Decryption")
@@ -186,12 +186,12 @@ Serializer.load(::Type{P}, ::Type{Decryption}, path::Path) where P <: ChaumPeder
 
 function Serializer.save(proposition::DecryptionInv, dir::Path) 
     
-    (; g, pk, cyphertexts, trackers) = proposition
+    (; g, pk, ciphertexts, trackers) = proposition
 
     pbkey_tree = Parser.marshal_publickey(pk, g)
     write(joinpath(dir, "publicKey.bt"), pbkey_tree)
 
-    write(joinpath(dir, "Ciphertexts.bt"), Tree(cyphertexts))
+    write(joinpath(dir, "Ciphertexts.bt"), Tree(ciphertexts))
     write(joinpath(dir, "DecryptionInv.bt"), Tree(trackers)) # Decryption could be renamed to Plaintexts
 
     return
@@ -206,15 +206,15 @@ function Serializer.load(::Type{DecryptionInv}, basedir::Path)
 
     G = typeof(g)
 
-    cyphertexts_tree = Parser.decode(read(joinpath(basedir, "Ciphertexts.bt")))
+    ciphertexts_tree = Parser.decode(read(joinpath(basedir, "Ciphertexts.bt")))
     plaintexts_tree = Parser.decode(read(joinpath(basedir, "DecryptionInv.bt")))
 
     N = 1 # ToDo: extract that from the tree
 
-    cyphertexts = convert(Vector{ElGamalRow{G, N}}, cyphertexts_tree)
+    ciphertexts = convert(Vector{ElGamalRow{G, N}}, ciphertexts_tree)
     plaintexts = convert(Vector{NTuple{N, G}}, plaintexts_tree)
 
-    return DecryptionInv(g, pk, cyphertexts, plaintexts)
+    return DecryptionInv(g, pk, ciphertexts, plaintexts)
 end
 
 Serializer.load(::Type{P}, ::Type{DecryptionInv}, path::Path) where P <: ChaumPedersenProof = Serializer.load(P, path; prefix="DecryptionInv")
