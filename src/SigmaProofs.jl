@@ -23,8 +23,6 @@ struct Simulator{T<:Proposition}
         # Alternative is to do conversion here if necessary
         @assert isvalid(typeof(proof), proposition) "Inconsistent simulator"
 
-        #@assert typeof(proof) <: proof_type(proposition) 
-
         return new{typeof(proposition)}(proposition, proof, verifier)
     end
 end

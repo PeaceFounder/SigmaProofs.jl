@@ -272,10 +272,29 @@ function marshal(x::PGroup)
     return tree
 end
 
+# A bit verbose; I could instead read all curve specifications and retrieve the NIST name
+function normalize_ecgroup_name(x::String)
+    name = replace(x, "_"=>"-")
 
-normalize_ecgroup_name(x::String) = replace(x, "_"=>"-")
+    lcase = lowercase(name)
+
+    if lcase == "prime192v1"
+        return "P-192"
+    elseif lcase == "secp224r1"
+        return "P-224"
+    elseif lcase == "prime256v1"
+        return "P-256"
+    elseif lcase == "secp384r1"
+        return "P-384"
+    elseif lcase == "secp521r1"
+        return "P-521"
+    else
+        return name
+    end
+
+end
+
 normalize_ecgroup_name(x::Symbol) = normalize_ecgroup_name(String(x))
-
 
 function marshal(g::ECGroup)
 
@@ -293,7 +312,6 @@ function marshal(g::ECGroup)
     return tree
 end
 
-
 function unmarshal(tree::Tree)
     
     group_type = convert(String, tree.x[1])
@@ -306,7 +324,6 @@ function unmarshal(tree::Tree)
         error("Unrecognized group type: $group_type")
     end
 end
-
 
 function _unmarshal_pgroup(x::Node) 
 
@@ -486,6 +503,22 @@ function unmarshal_privatekey(tree::Tree)
     return (s, g) ### The group can often be omited when not needed.
 end
 
+# Returns the depth of the tree
+function depth(tree::Tree)
+
+    if tree isa Leaf
+        return 0
+    else
+        return 1 + depth(tree[1])
+    end
+
+end
+
+width_elgamal_row(::Type{<:PGroup}, tree::Tree) = depth(tree) == 1 ? 1 : length(tree[1])
+width_elgamal_row(::Type{<:ECGroup}, tree::Tree) = depth(tree) == 2 ? 1 : length(tree[1])
+
+width_elgamal_vec(::Type{<:PGroup}, tree::Tree) = depth(tree) == 2 ? 1 : length(tree[1])
+width_elgamal_vec(::Type{<:ECGroup}, tree::Tree) = depth(tree) == 3 ? 1 : length(tree[1])
 
 Tree(x::Vector{BigInt}; L = bitlength(maximum(x))) = Node([Leaf(i, L) for i in x])
 

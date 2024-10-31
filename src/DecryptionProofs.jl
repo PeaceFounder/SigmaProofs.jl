@@ -1,7 +1,7 @@
 module DecryptionProofs
 
 using ..Serializer: Serializer, Path, load
-using ..SigmaProofs.Parser: Parser, Tree
+using ..SigmaProofs.Parser: Parser, Tree, width_elgamal_vec
 using ..SigmaProofs: Proposition, Verifier, Simulator
 using ..ElGamal: ElGamalRow
 using ..LogProofs: ChaumPedersenProof, LogEquality
@@ -162,17 +162,27 @@ end
 
 Serializer.save(proof::ChaumPedersenProof, ::Type{<:Decryption}, path::Path) = Serializer.save(proof, path; prefix="Decryption")
 
-function Serializer.load(::Type{Decryption}, basedir::Path)
+function Serializer.load(::Type{T}, basedir::Path) where T <: Decryption
+
+    _extract_group(::Type{Decryption{G}}) where G <: Group = G
+    _extract_group(::Type{Decryption}) = nothing
+
+    G = _extract_group(T)
     
     publickey_tree = Parser.decode(read(joinpath(basedir, "publicKey.bt")))
     pk, g = Parser.unmarshal_publickey(publickey_tree; relative=true)
 
-    G = typeof(g)
+    if isnothing(G)
+        G = typeof(g)
+    else
+        pk = convert(G, pk)
+        g = convert(G, g)
+    end
 
     ciphertexts_tree = Parser.decode(read(joinpath(basedir, "Ciphertexts.bt")))
     plaintexts_tree = Parser.decode(read(joinpath(basedir, "Decryption.bt")))
-
-    N = 1 # ToDo: extract that from the tree
+    
+    N = width_elgamal_vec(G, ciphertexts_tree)
 
     ciphertexts = convert(Vector{ElGamalRow{G, N}}, ciphertexts_tree)
     plaintexts = convert(Vector{NTuple{N, G}}, plaintexts_tree)
@@ -180,9 +190,9 @@ function Serializer.load(::Type{Decryption}, basedir::Path)
     return Decryption(g, pk, ciphertexts, plaintexts)
 end
 
-Serializer.load(::Type{P}, ::Type{Decryption}, path::Path) where P <: ChaumPedersenProof = Serializer.load(P, path; prefix="Decryption")
+Serializer.load(::Type{Decryption{G}}, basedir::Path) where G <: Group = load(Decryption, basedir; G)
 
-# ToDO
+Serializer.load(::Type{P}, ::Type{Decryption}, path::Path) where P <: ChaumPedersenProof = Serializer.load(P, path; prefix="Decryption")
 
 function Serializer.save(proposition::DecryptionInv, dir::Path) 
     
@@ -199,17 +209,28 @@ end
 
 Serializer.save(proof::ChaumPedersenProof, ::Type{<:DecryptionInv}, path::Path) = Serializer.save(proof, path; prefix="DecryptionInv")
 
-function Serializer.load(::Type{DecryptionInv}, basedir::Path)
-    
+
+function Serializer.load(::Type{T}, basedir::Path) where T <: DecryptionInv
+
+    _extract_group(::Type{DecryptionInv{G}}) where G <: Group = G
+    _extract_group(::Type{DecryptionInv}) = nothing
+
+    G = _extract_group(T)
+
     publickey_tree = Parser.decode(read(joinpath(basedir, "publicKey.bt")))
     pk, g = Parser.unmarshal_publickey(publickey_tree; relative=true)
 
-    G = typeof(g)
+    if isnothing(G)
+        G = typeof(g)
+    else
+        pk = convert(G, pk)
+        g = convert(G, g)
+    end
 
     ciphertexts_tree = Parser.decode(read(joinpath(basedir, "Ciphertexts.bt")))
     plaintexts_tree = Parser.decode(read(joinpath(basedir, "DecryptionInv.bt")))
 
-    N = 1 # ToDo: extract that from the tree
+    N = width_elgamal_vec(G, ciphertexts_tree)
 
     ciphertexts = convert(Vector{ElGamalRow{G, N}}, ciphertexts_tree)
     plaintexts = convert(Vector{NTuple{N, G}}, plaintexts_tree)

@@ -6,8 +6,6 @@ using CryptoGroups.Specs: MODP, ECP
 using CryptoPRG.Verificatum: PRG, RO
 using CryptoUtils: is_quadratic_residue, sqrt_mod_prime
 
-# import ...SigmaProofs: generator_basis
-
 function modp_generator_basis(prg::PRG, p::Integer, q::Integer, N::Integer; nr::Integer = 0)
 
     np = bitlength(p)

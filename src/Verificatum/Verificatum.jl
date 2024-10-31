@@ -250,8 +250,14 @@ function Serializer.save(spec::ProtocolSpec, path::Path; name="undefined")
 end
 
 
-function Serializer.load(::Type{ProtocolSpec}, path::Path; auxsid = "default")
 
+function Serializer.load(::Type{T}, path::Path; auxsid = "default") where T <: ProtocolSpec
+
+    _extract_group(::Type{ProtocolSpec{G}}) where G <: Group = G
+    _extract_group(::Type{ProtocolSpec}) = nothing
+
+    G = _extract_group(T)
+    
     xml = read(path) |> String
     
     rohash = HashSpec(match(r"<rohash>(.*?)</rohash>", xml)[1] |> map_hash_name)
@@ -263,10 +269,13 @@ function Serializer.load(::Type{ProtocolSpec}, path::Path; auxsid = "default")
     ne = parse(Int32, match(r"<ebitlenro>(.*?)</ebitlenro>", xml)[1])
 
     g = unmarshal(decode(split(s_Gq, "::")[2]))
+    
+    if !isnothing(G)
+        g = convert(G, g)
+    end
 
     version = match(r"<version>(.*?)</version>", xml)[1] |> String
     sid = match(r"<sid>(.*?)</sid>", xml)[1] |> String
-
 
     return ProtocolSpec(; g, nr, nv, ne, prghash, rohash, version, sid, auxsid)
 end

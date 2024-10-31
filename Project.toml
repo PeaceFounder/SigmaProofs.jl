@@ -1,7 +1,7 @@
 name = "SigmaProofs"
 uuid = "f8559b4c-f045-44a2-8db2-503e40bb7416"
 authors = ["Janis Erdmanis <janiserdmanis@protonmail.ch>"]
-version = "0.1.1"
+version = "0.1.2"
 
 [deps]
 CryptoGroups = "bc997328-bedd-407e-bcd3-5758e064a52d"
