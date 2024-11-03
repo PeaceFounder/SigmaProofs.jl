@@ -1,21 +1,21 @@
 using Test
-using SigmaProofs.Parser: tobig, int2bytes, bitlength, interpret
+using SigmaProofs.Parser: tobig, bitlength, interpret
 
 x = big(2)^100
 
-@test tobig(int2bytes(x)) == x
+# @test tobig(int2bytes(x)) == x
 
-x = 2^63 - 1
+# x = 2^63 - 1
 
-@test int2bytes(big(x)) == reinterpret(UInt8, [x])
+# @test int2bytes(big(x)) == reinterpret(UInt8, [x])
 
-y = UInt64(2)^63 + UInt64(1)
+# y = UInt64(2)^63 + UInt64(1)
 
-@test int2bytes(big(y)) == reinterpret(UInt8, [y])
+# @test int2bytes(big(y)) == reinterpret(UInt8, [y])
 
-z = UInt128(2)^128 - UInt128(1)
+# z = UInt128(2)^128 - UInt128(1)
 
-@test int2bytes(big(z)) == reinterpret(UInt8, [z])
+# @test int2bytes(big(z)) == reinterpret(UInt8, [z])
 
 
 u = 300

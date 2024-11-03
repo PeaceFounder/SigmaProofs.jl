@@ -280,7 +280,6 @@ function Serializer.load(::Type{T}, path::Path; auxsid = "default") where T <: P
     return ProtocolSpec(; g, nr, nv, ne, prghash, rohash, version, sid, auxsid)
 end
 
-#Serializer.treespec(::Type{<:ProtocolSpec}) = "ProtInfo.xml"
 Serializer.treespec(::Type{<:ProtocolSpec}) = "protInfo.xml"
 
 end

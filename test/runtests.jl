@@ -10,6 +10,7 @@ end
 
 @safetestset "Testing ECGroup Generator Basis" begin
     include("Verificatum/gecbasis.jl")
+    include("Verificatum/ecp_basis.jl")
 end
 
 @safetestset "Testing Generators" begin

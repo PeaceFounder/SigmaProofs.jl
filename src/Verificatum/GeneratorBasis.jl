@@ -3,8 +3,10 @@ module GeneratorBasis
 using CryptoGroups.Utils: @check
 using CryptoGroups: modulus, order, bitlength, Group, spec
 using CryptoGroups.Specs: MODP, ECP
-using CryptoPRG.Verificatum: PRG, RO
-using CryptoUtils: is_quadratic_residue, sqrt_mod_prime
+using CryptoPRG.Verificatum: PRG, RO, PRGIterator
+using CryptoUtils: is_quadratic_residue #, sqrt_mod_prime
+
+using BitIntegers
 
 function modp_generator_basis(prg::PRG, p::Integer, q::Integer, N::Integer; nr::Integer = 0)
 
@@ -21,28 +23,81 @@ end
 
 modp_generator_basis(prg::PRG, spec::MODP, N::Integer; nr::Integer = 0) = modp_generator_basis(prg, modulus(spec), order(spec), N; nr)
 
-function ecp_generator_basis(prg::PRG, (a, b)::Tuple{Integer, Integer}, p::Integer, q::Integer, N::Integer; nr::Integer = 0)
+using CryptoUtils: tonelli_shanks, hoc_sqrt
+
+# https://github.com/fcasal/CryptoUtils.jl/issues/3
+function sqrt_mod_prime(a::BigInt, p::BigInt)
+    #a = mod(a, p)
+    #is_quadratic_residue(a, p) || throw("$a is not a quadratic residue mod $p.")
+
+    if p % 2 == 0
+        return a
+
+    elseif p % 4 == 3
+        return powermod(a, div(p + 1, 4), p)
+
+    elseif p % 8 == 5
+        d = powermod(a, div(p - 1, 4), p)
+
+        if d == 1
+            r = powermod(a, div(p + 3, 8), p)
+        elseif d == p - 1
+            r = mod(2 * a * powermod(4 * a, div(p - 5, 8), p), p)
+        end
+
+        return r
+
+    # If p-1 is of the form 2^k*s for large k, use tonelli-shanks.
+    # Here k is large if k > 100
+    elseif mod(p - 1, 1267650600228229401496703205376) == 0
+        return tonelli_shanks(a, p)
+
+    # depends on size of k
+    else
+        return hoc_sqrt(a, p)
+    end
+end
+
+sqrt_mod_prime(a::Integer, b::Integer) = sqrt_mod_prime(BigInt(a), BigInt(b))
+
+function bitint_type(nbits::Int)
+    if nbits <= 256
+        return UInt256
+    elseif nbits <= 512
+        return UInt512
+    elseif nbits <= 1024
+        return UInt1024
+    else
+        return BigInt
+    end
+end
+
+function ecp_generator_basis(prg::PRG, (a, b)::Tuple{T, T}, p::T, q::T, N::Integer; nr::Integer = 0) where T <: Integer
 
     np = bitlength(p) # 1
 
-    𝐭 = rand(prg, BigInt, N*10; n = np + nr)  # OPTIMIZE (I would need it as an iterator)
+    d = T(2)^(np + nr)
+    
+    U = bitint_type(np)
+    up = U(p)
 
-    𝐭′ = mod.(𝐭, big(2)^(np + nr))
-
-    𝐳 = mod.(𝐭′, p)
-
-    𝐡 = Vector{Tuple{BigInt, BigInt}}(undef, N)
+    𝐡 = Vector{Tuple{T, T}}(undef, N)
 
     l = 1
 
     f(x) = x^3 + a*x + b # This assumes that I do know how to do arithmetics with fields.
 
-    for zi in 𝐳
+    for ti in PRGIterator{T}(prg, np + nr)
+
+        ti′ = mod(ti, d)
+        zi = mod(ti′, p)
+
         y2 = mod(f(zi), p)
 
-        if is_quadratic_residue(y2, p)
+        if is_quadratic_residue(U(y2), up)
 
             x = zi
+
             y = sqrt_mod_prime(y2, p)
 
             # The smallest root is taken

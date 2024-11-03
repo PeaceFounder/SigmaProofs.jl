@@ -2,7 +2,7 @@ module Parser
 
 using ...ElGamal: ElGamalRow
 using CryptoGroups.Curves: a, b, field, gx, gy
-using CryptoGroups: PGroup, ECGroup, Group, value, concretize_type, spec, generator, name, ECPoint, modulus, order
+using CryptoGroups: PGroup, ECGroup, Group, value, concretize_type, spec, generator, name, ECPoint, modulus, order, octet
 using CryptoPRG.Verificatum: HashSpec
 import CryptoGroups.Fields: bitlength # TODO: import -> using
 using CryptoGroups.Utils: int2octet, @check
@@ -13,16 +13,16 @@ import Base.==
 tobig(x) = parse(BigInt, bytes2hex(reverse(x)), base=16)
 interpret(::Type{BigInt}, x::Vector{UInt8}) = tobig(reverse(x))
 
-function interpret(::Type{T}, x::Vector{UInt8}) where T <: Integer 
-
+function interpret(::Type{T}, x::AbstractVector{UInt8}) where T <: Integer 
     L = bitlength(T) ÷ 8
-    y = UInt8[zeros(UInt8, L - length(x))..., x...]
-
-    r = reinterpret(T, reverse(y))[1]
-    return r
+    result = zero(T)
+    for i in 1:min(length(x), L)
+        result |= T(x[length(x)-i+1]) << (8(i-1)) # @inbounds
+    end
+    return result
 end
 
-function int2bytes(x::Integer)
+function interpret(::Type{Vector{UInt8}}, x::BigInt) 
 
     @check x > 0
     
@@ -31,10 +31,9 @@ function int2bytes(x::Integer)
         hex = string("0", hex)
     end
 
-    return reverse(hex2bytes(hex))
+    return hex2bytes(hex)
 end
 
-interpret(::Type{Vector{UInt8}}, x::BigInt) = reverse(int2bytes(x))
 interpret(::Type{Vector{UInt8}}, x::Integer) = reverse(reinterpret(UInt8, [x])) # Number of bytes are useful for construction for bytes. 
 
 function interpret(::Type{Vector{T}}, 𝐫::Vector{UInt8}, N::Int) where T <: Integer
@@ -72,74 +71,103 @@ Base.push!(n::Node, y) = push!(n.x, y)
 
 toint(x) = reinterpret(UInt32, x[4:-1:1])[1] ### TOREMOVE
 
-function parseb(x)
+
+# Add position tracking to avoid array slicing
+mutable struct BinaryParser
+    data::Vector{UInt8}
+    pos::Int
+end
+
+function read_uint32!(parser::BinaryParser)
+    val = interpret(UInt32, @view parser.data[parser.pos:parser.pos+3])
+    parser.pos += 4
+    return val
+end
+
+function read_bytes!(parser::BinaryParser, len::Integer)
+    bytes = @view parser.data[parser.pos:parser.pos+len-1]
+    parser.pos += len
+    return bytes
+end
+
+function parseb!(parser::BinaryParser)
+    marker = parser.data[parser.pos]
+    parser.pos += 1
     
-    if x[1] == LEAF
-
-        L = interpret(UInt32, x[2:5])
-
-        bytes = x[6:5+L]
-        leaf = Leaf(bytes)
-
-        if length(x) == L + 5
-            rest = []
-        else
-            rest = x[L+6:end]
-        end
-
-        return leaf, rest
-
-    elseif x[2] == NODE
-
-        N = interpret(UInt32, x[2:5])
-
-        rest = x[6:end]
-
+    if marker == LEAF
+        L = read_uint32!(parser)
+        bytes = read_bytes!(parser, L)
+        return Leaf(bytes)
+    elseif marker == NODE
+        N = read_uint32!(parser)
         node = Node()
-
-        for i in 1:N
-            head, tail = parseb(rest)
-            push!(node, head)
-            rest = tail
+        sizehint!(node.x, N)  # Pre-allocate space for children
+        for _ in 1:N
+            child = parseb!(parser)
+            push!(node, child)
         end
-        
-        return node, rest
+        return node
+    else
+        throw(ArgumentError("Invalid marker byte: $marker"))
     end
 end
 
+# Main entry point that maintains the same interface
+function parseb(x::Vector{UInt8})
+    parser = BinaryParser(x, 1)
+    tree = parseb!(parser)
+    remaining = if parser.pos <= length(x)
+        @view x[parser.pos:end]
+    else
+        UInt8[]
+    end
+    return tree, remaining
+end
 
 decode(x::Vector{UInt8}) = parseb(x)[1]
 decode(x::AbstractString) = decode(hex2bytes(replace(x, " "=>""))) # I could have optional arguments here as well
 
-
-function tobin(leaf::Leaf)
-
-    N = UInt32(length(leaf.x))
-
-    Nbin = interpret(Vector{UInt8}, N)
-    bin = UInt8[LEAF, Nbin..., leaf.x...]
-
-    return bin
+# Helper function to write UInt32 in correct byte order
+function write_uint32!(io::IO, n::UInt32)
+    # Write length in little-endian format
+    bytes = reinterpret(UInt8, [n])
+    # Reverse bytes to match expected format
+    write(io, reverse(bytes))
 end
 
-function tobin(node::Node)
+function encode!(io::IO, leaf::Leaf)
+    # Write type marker for leaf (01)
+    write(io, UInt8(0x01))
     
-    N = UInt32(length(node.x))
-    Nbin = interpret(Vector{UInt8}, N)
+    # Write length of data
+    write_uint32!(io, UInt32(length(leaf.x)))
     
-    data = UInt8[]
+    # Write data directly
+    write(io, leaf.x)
+end
 
-    for n in node.x
-        b = tobin(n)
-        append!(data, b)
+function encode!(io::IO, node::Node)
+    # Write type marker for node (00)
+    write(io, UInt8(0x00))
+    
+    # Write number of children
+    write_uint32!(io, UInt32(length(node.x)))
+    
+    # Write all child nodes directly
+    for child in node.x
+        encode!(io, child)
     end
-
-    bin = UInt8[NODE, Nbin..., data...]
-
-    return bin
 end
 
-encode(x::Tree) = tobin(x)
+# Generic dispatch for Tree type
+encode!(io::IO, tree::Tree) = encode!(io, tree)
+
+# Optional convenience method that returns the encoded bytes
+function encode(tree::Tree)
+    io = IOBuffer()
+    encode!(io, tree)
+    take!(io)
+end
 
 convert(::Type{T}, x::Leaf) where T <: Integer = interpret(T, x.x)
 
@@ -168,25 +196,36 @@ function Leaf(x::Signed)
 end
 
 Leaf(x::Unsigned) = Leaf(interpret(Vector{UInt8}, x))
-    
 
-function Leaf(x::Integer, k::Integer) 
-    
+function interpret!(result::Vector{UInt8}, k::Integer, x::Integer)
     if x == 0
-
-        return Leaf(zeros(UInt8, k))
-
-    else
-        leaf = Leaf(x)
-
-        N = findfirst(x -> x != UInt8(0), leaf.x)
-        bytes = leaf.x[N:end]
-        pad = k - length(bytes)
-
-        return newleaf = Leaf(UInt8[zeros(UInt8, pad)...,bytes...])
+        fill!(result, 0x00)
+        return 0
     end
+    
+    hex = string(x, base=16)
+    bytes_needed = (length(hex) + 1) ÷ 2
+    
+    # Fill padding zeros if needed
+    if k > bytes_needed
+        fill!(view(result, 1:k-bytes_needed), 0x00)
+    end
+    
+    # Ensure even length for hex string
+    if mod(length(hex), 2) != 0
+        hex = string("0", hex)
+    end
+    
+    hex2bytes!(view(result, k-bytes_needed+1:k), hex) 
+    
+    return bytes_needed
 end
 
+function Leaf(x::Integer, k::Integer)
+    result = Vector{UInt8}(undef, k)
+    interpret!(result, k, x)
+    return Leaf(result)
+end
 
 function Leaf(x::AbstractString)
     bytes = Vector{UInt8}(x)
@@ -213,9 +252,7 @@ function Node(x::Tuple; L=nothing)
     return node
 end
 
-
 ############################ COMPOSITE TYPE PARSING ############################
-
 
 function convert(::Type{Vector{G}}, x::Node; allow_one=false) where G <: Group 
     return G[convert(G, i; allow_one) for i in x.x] 
@@ -236,19 +273,62 @@ Tree(x::PGroup; L = bitlength(x)) = Leaf(value(x), div(L + 1, 8, RoundUp))
 # Probably I will need to replace 
 convert(::Type{G}, x::Leaf; allow_one=false) where G <: PGroup = convert(G, convert(BigInt, x); allow_one)
 
-### Note that only PrimeCurves are supported. 
-convert(::Type{G}, x::Node; allow_one=false) where G <: ECGroup = convert(G, convert(Tuple{BigInt, BigInt}, x); allow_one)
-convert(::Type{ECGroup{P}}, x::Node; allow_one=false) where P <: ECPoint = convert(ECGroup{P}, convert(Tuple{BigInt, BigInt}, x); allow_one)
+# Perhaps I could also use a let here
+# It could be made threaad local
+const EC_BUFFER = Vector{UInt8}(undef, 1000) # We can make it also thread local 
+function convert(::Type{ECGroup{P}}, x::Node; allow_one=false) where P <: ECPoint
 
+    L = bitlength(field(P))
+    nbytes_field = cld(L, 8)  
+
+    x_bytes = @view x[1].x[end-(nbytes_field-1):end]
+    y_bytes = @view x[2].x[end-(nbytes_field-1):end]
+
+    if all(iszero, x_bytes) && all(iszero, y_bytes)
+        point_bytes = UInt8[0x00]
+    else
+        #buffer = Vector{UInt8}(undef, 1 + 2*nbytes_field)
+        EC_BUFFER[1] = 0x04
+        @inbounds copyto!(@view(EC_BUFFER[2:nbytes_field+1]), x_bytes)
+        @inbounds copyto!(@view(EC_BUFFER[nbytes_field+2:2nbytes_field+1]), y_bytes)
+        
+        point_bytes = @view EC_BUFFER[1:2nbytes_field+1]
+        #point_bytes = UInt8[0x04; x_bytes; y_bytes]
+    end
+
+    return convert(ECGroup{P}, point_bytes; allow_one)
+end
 
 function Tree(g::G; L = bitlength(G)) where G <: ECGroup
+
+    nbytes_field = cld(L, 8)  # Using cld instead of div(x, y, RoundUp) 
+    nbytes_spec = cld(L + 1, 8)
     
-    gxleaf = Leaf(value(gx(g)), div(L + 1, 8, RoundUp))
-    gyleaf = Leaf(value(gy(g)), div(L + 1, 8, RoundUp))
+    bytes = octet(g)
 
-    gtree = Tree((gxleaf, gyleaf))
+    if iszero(bytes[1])
 
-    return gtree
+        leaf = Leaf(zeros(UInt8, nbytes_spec))
+        return Tree((leaf, leaf))
+
+    end
+
+    @views x_bytes = bytes[2:nbytes_field + 1]
+    @views y_bytes = bytes[nbytes_field + 2:end]
+
+    if nbytes_spec == nbytes_field
+
+        gxleaf = Leaf(x_bytes)
+        gyleaf = Leaf(y_bytes)
+
+    elseif nbytes_spec == nbytes_field + 1 # This is such an unfortunate oversight in the specification
+        
+        gxleaf = Leaf(UInt8[0x00; x_bytes])
+        gyleaf = Leaf(UInt8[0x00; y_bytes])
+
+    end
+        
+    return Tree((gxleaf, gyleaf))
 end
 
 function Tree(x::Vector{<:Group})
@@ -363,9 +443,6 @@ end
 
 function convert(::Type{Vector{ElGamalRow{G, N}}}, tree::Node; allow_one=false) where {G <: Group, N}
 
-    #𝐚 = convert(NTuple{N, Vector{G}}, tree[1]; allow_one)
-    #𝐛 = convert(NTuple{N, Vector{G}}, tree[2]; allow_one)
-
     𝐚 = ntuple(n -> convert(Vector{G}, tree[1][n]; allow_one), N)
     𝐛 = ntuple(n -> convert(Vector{G}, tree[2][n]; allow_one), N)
 
@@ -384,14 +461,11 @@ function convert(::Type{ElGamalRow{G, 1}}, tree::Node; allow_one=false) where G 
     return ElGamalRow(a, b)
 end
 
-
 convert(::Type{NTuple{N, G}}, tree::Node; allow_one=false) where {G <: Group, N} = ntuple(n -> convert(G, tree[n]; allow_one), N)
-
 
 convert(::Type{NTuple{N, BigInt}}, tree::Node) where N = ntuple(n -> convert(BigInt, tree[n]), N)
 convert(::Type{NTuple{1, BigInt}}, tree::Leaf) = tuple(convert(BigInt, tree))
     
-
 function convert(::Type{ElGamalRow{G, N}}, tree::Node; allow_one=false) where {G <: Group, N}
 
     a_tree, b_tree = tree.x
