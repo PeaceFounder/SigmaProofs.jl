@@ -22,7 +22,6 @@ end
 end
 
 @safetestset "Testing Parser" begin
-    include("utils.jl")
     include("parser.jl")
 end
 

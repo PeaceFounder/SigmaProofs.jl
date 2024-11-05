@@ -4,14 +4,13 @@ using ...ElGamal: ElGamalRow
 using CryptoGroups.Curves: a, b, field, gx, gy
 using CryptoGroups: PGroup, ECGroup, Group, value, concretize_type, spec, generator, name, ECPoint, modulus, order, octet
 using CryptoPRG.Verificatum: HashSpec
-import CryptoGroups.Fields: bitlength # TODO: import -> using
-using CryptoGroups.Utils: int2octet, @check
+using CryptoGroups.Fields: bitlength
+using CryptoGroups.Utils: int2octet, @check, octet2int, int2octet, int2octet!
 
 import Base.convert
 import Base.==
 
-tobig(x) = parse(BigInt, bytes2hex(reverse(x)), base=16)
-interpret(::Type{BigInt}, x::Vector{UInt8}) = tobig(reverse(x))
+interpret(::Type{BigInt}, x::Vector{UInt8}) = octet2int(x) # Not a great function name
 
 function interpret(::Type{T}, x::AbstractVector{UInt8}) where T <: Integer 
     L = bitlength(T) ÷ 8
@@ -20,18 +19,6 @@ function interpret(::Type{T}, x::AbstractVector{UInt8}) where T <: Integer
         result |= T(x[length(x)-i+1]) << (8(i-1)) # @inbounds
     end
     return result
-end
-
-function interpret(::Type{Vector{UInt8}}, x::BigInt) 
-
-    @check x > 0
-    
-    hex = string(x, base=16)
-    if mod(length(hex), 2) != 0
-        hex = string("0", hex)
-    end
-
-    return hex2bytes(hex)
 end
 
 interpret(::Type{Vector{UInt8}}, x::Integer) = reverse(reinterpret(UInt8, [x])) # Number of bytes are useful for construction for bytes. 
@@ -195,35 +182,11 @@ function Leaf(x::Signed)
     end
 end
 
-Leaf(x::Unsigned) = Leaf(interpret(Vector{UInt8}, x))
-
-function interpret!(result::Vector{UInt8}, k::Integer, x::Integer)
-    if x == 0
-        fill!(result, 0x00)
-        return 0
-    end
-    
-    hex = string(x, base=16)
-    bytes_needed = (length(hex) + 1) ÷ 2
-    
-    # Fill padding zeros if needed
-    if k > bytes_needed
-        fill!(view(result, 1:k-bytes_needed), 0x00)
-    end
-    
-    # Ensure even length for hex string
-    if mod(length(hex), 2) != 0
-        hex = string("0", hex)
-    end
-    
-    hex2bytes!(view(result, k-bytes_needed+1:k), hex) 
-    
-    return bytes_needed
-end
+Leaf(x::Unsigned) = Leaf(int2octet(x))
 
 function Leaf(x::Integer, k::Integer)
     result = Vector{UInt8}(undef, k)
-    interpret!(result, k, x)
+    int2octet!(result, x)
     return Leaf(result)
 end
 
@@ -261,20 +224,13 @@ end
 
 (h::HashSpec)(t::Tree) = h(convert(Vector{UInt8}, t))  ### need to relocate
 
-# To be added to CryptoGroups
-bitlength(::Type{G}) where G <: PGroup = bitlength(modulus(G)) 
-bitlength(x::PGroup) = bitlength(modulus(x)) 
-
-bitlength(::Type{ECGroup{P}}) where P <: ECPoint = bitlength(modulus(field(P)))
-bitlength(g::G) where G <: ECGroup = bitlength(G)
 
 Tree(x::PGroup; L = bitlength(x)) = Leaf(value(x), div(L + 1, 8, RoundUp))
 
 # Probably I will need to replace 
 convert(::Type{G}, x::Leaf; allow_one=false) where G <: PGroup = convert(G, convert(BigInt, x); allow_one)
 
-# Perhaps I could also use a let here
-# It could be made threaad local
+# This is currently not tread safe. The allocation did show up in the profiler hence this
 const EC_BUFFER = Vector{UInt8}(undef, 1000) # We can make it also thread local 
 function convert(::Type{ECGroup{P}}, x::Node; allow_one=false) where P <: ECPoint
 
@@ -293,7 +249,6 @@ function convert(::Type{ECGroup{P}}, x::Node; allow_one=false) where P <: ECPoin
         @inbounds copyto!(@view(EC_BUFFER[nbytes_field+2:2nbytes_field+1]), y_bytes)
         
         point_bytes = @view EC_BUFFER[1:2nbytes_field+1]
-        #point_bytes = UInt8[0x04; x_bytes; y_bytes]
     end
 
     return convert(ECGroup{P}, point_bytes; allow_one)

@@ -136,7 +136,7 @@ function generator_basis(prg::PRG, ::Type{G}, N::Integer; nr::Integer = 0) where
     @check !isnothing(order(G)) "Order of the group must be known"
     _spec = spec(G)
     g_vec = _generator_basis(prg, _spec, N; nr)
-    return G.(g_vec)
+    return G.(g_vec; skip_validation = true) 
 end
 
 generator_basis(prg::PRG, ::Type{G}; nr::Integer = 0) where G <: Group = generator_basis(prg, G, 1; nr)[1]
