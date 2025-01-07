@@ -6,9 +6,10 @@ using CryptoGroups.Utils: int2octet
 using CryptoPRG.Verificatum: ROPRG, PRG, HashSpec, bitlength
 using ..Serializer: Serializer, Path
 import ..SigmaProofs: prove, verify, proof_type
-using ..SigmaProofs: Proposition, Verifier, Proof, Simulator, challenge, Parser, gen_roprg
+using ..SigmaProofs: Proposition, Verifier, Proof, Simulator, challenge, Parser
 using Base.Iterators: flatten
 using ..SigmaProofs.Parser: Tree
+import ..SigmaProofs: gen_roprg
 
 
 struct LogKnowledge{G <: Group} <: Proposition
@@ -23,13 +24,14 @@ end
 
 proof_type(::Type{LogKnowledge{G}}) where G <: Group = SchnorrProof{G}
 
-function prove(proposition::LogKnowledge{G}, verifier::Verifier, x::Integer; suffix = nothing) where G <: Group
+function gen_roprg(proposition::LogKnowledge, x::Integer)
+    (; g, y) = proposition
+    return gen_roprg([octet(y)..., int2octet(x)...])
+end
+
+function prove(proposition::LogKnowledge{G}, verifier::Verifier, x::Integer; suffix = nothing, roprg = gen_roprg(proposition, x)) where G <: Group
 
     (; g, y) = proposition
-
-    # we can construct proof deterministically without relying on randomness source
-    roprg = gen_roprg([octet(y)..., int2octet(x)...])
-    #prg = PRG(HashSpec("sha256"), [octet(y)..., int2octet(x)...])
 
     r = rand(roprg(:x), 2:order(G) - 1)
 

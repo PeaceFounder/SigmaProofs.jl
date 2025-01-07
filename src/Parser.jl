@@ -384,7 +384,6 @@ function _unmarshal_ecgroup(x::Leaf)
     return g
 end
 
-
 function convert(::Type{Vector{ElGamalRow{G, 1}}}, tree::Node; allow_one=false) where G <: Group
 
     a_tree, b_tree = tree.x
@@ -394,7 +393,6 @@ function convert(::Type{Vector{ElGamalRow{G, 1}}}, tree::Node; allow_one=false) 
 
     return 𝐞
 end
-
 
 function convert(::Type{Vector{ElGamalRow{G, N}}}, tree::Node; allow_one=false) where {G <: Group, N}
 
@@ -494,7 +492,6 @@ function marshal_publickey(y::G, g::G) where G <: Group
 
     return tree
 end
-
 
 # TOOD: change return order
 function unmarshal_publickey(tree::Tree; relative::Bool = false)
