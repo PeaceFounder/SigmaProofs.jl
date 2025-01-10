@@ -193,7 +193,7 @@ decrypted = merge_decryptions(simulator, ciphertexts, shares, proofs)
 
 The implementation includes essential components for polynomial evaluation and Lagrange interpolation, fully integrated with the SigmaProofs framework for generating and verifying consistency proofs. For detailed implementation examples, refer to the test/secretsharing.jl file.
 
-## Independent Generator Commitment Shuffle
+## Generator Commitment Shuffle
 
 The package introduces a novel shuffle protocol specifically designed for commitments using independent generators. Unlike generic commitment shuffles, this protocol assigns each participant a unique, independently generated base for their commitment. This interactive but asynchronous protocol provides information-theoretic security, making it particularly valuable for applications requiring long-term privacy guarantees against future cryptographic breakthroughs or quantum computing advances. The uniqueness of generators prevents malicious substitution of commitments while maintaining unlinkability of the shuffle outputs.
 
