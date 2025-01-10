@@ -176,22 +176,76 @@ simulator = rangeenc(range, g, pk, vote, verifier; 𝐺)
 
 These range proofs work in conjunction with homomorphic tallying methods where individual votes remain encrypted while allowing computation of the final tally through threshold decryption ceremonies. The proofs ensure vote validity without compromising voter privacy.
 
+
 ## Secret Sharing
 
-The SecretSharing module implements Feldman's Verifiable Secret Sharing (VSS) scheme, extending Shamir's Secret Sharing with built-in verification capabilities. This protocol enables a dealer to distribute shares of a secret among participants while allowing them to verify their shares' consistency without compromising the secret's security.
+The SecretSharing module implements a robust and secure version of Feldman's Verifiable Secret Sharing (VSS) scheme, which enhances the classical Shamir's Secret Sharing with crucial verification capabilities. This implementation enables a trusted dealer to distribute shares of a sensitive secret among multiple participants while simultaneously providing them with cryptographic proofs to verify their shares' validity. This verification process ensures that when the time comes to reconstruct the secret, all valid shares will contribute to recreating the exact same secret, preventing both malicious participants and potential dealer misconduct.
 
-The module provides comprehensive functionality for the complete VSS lifecycle:
+At its core, the scheme operates by embedding the secret as the first coefficient of a polynomial, with the remaining coefficients generated randomly to ensure security. The dealer then evaluates this polynomial at different points to create unique shares for each participant. What sets VSS apart from basic secret sharing is the addition of public commitments to the polynomial coefficients, allowing participants to verify their shares' correctness without compromising the scheme's security properties.
+
+Here's a comprehensive example demonstrating the VSS protocol implementation:
 
 ```julia
-# Secret sharing setup
-simulator = sharding_setup(g, nodes, coeff, verifier)
+using CryptoGroups
+using SigmaProofs.SecretSharing
+using SigmaProofs.Verificatum
 
-# Reconstruction using threshold shares
-merged = merge_exponentiations(simulator, shares, proofs, verifier)
-decrypted = merge_decryptions(simulator, ciphertexts, shares, proofs)
+# Initialize the group and verifier
+G = @ECGroup{P_192}
+g = G()
+verifier = ProtocolSpec(; g)
+
+# Setup parameters
+N = 5  # Number of participants
+M = 3  # Threshold (minimum participants needed for reconstruction)
+
+# Generate participant nodes and polynomial coefficients
+nodes = rand(2:order(G) - 1, N) 
+coeff = rand(2:order(G) - 1, M)
+
+# Generate shares using polynomial evaluation
+d_vec = evaluate_poly(nodes, coeff, order(G))
+
+# Create and verify the sharing setup
+setup = sharding_setup(g, nodes, coeff, verifier; d_vec)
+verify(setup) # true
 ```
 
-The implementation includes essential components for polynomial evaluation and Lagrange interpolation, fully integrated with the SigmaProofs framework for generating and verifying consistency proofs. For detailed implementation examples, refer to the test/secretsharing.jl file.
+The polynomial evaluation at different nodes creates shares that can be used to reconstruct the secret (first coefficient) through Lagrange interpolation. This mathematical foundation ensures that only groups of participants meeting or exceeding the threshold can successfully reconstruct the secret:
+
+```julia
+# Minimum threshold reconstruction
+l_vec = lagrange_coef(nodes[1:M], order(G))
+mod(sum(d_vec[1:M] .* l_vec), order(G)) == first(coeff)
+
+# Can be constructed all shards
+l_vec = lagrange_coef(nodes, order(G))
+mod(sum(d_vec .* l_vec), order(G)) == first(coeff)
+```
+
+One of the most powerful applications of VSS lies in distributed cryptographic operations, particularly in threshold cryptography. Each participant's verified share `(ni, di)` can contribute to joint operations like distributed signing or decryption, where the group's public key is derived from the shared secret `pk = g^first(coeff)`. This enables robust threshold cryptographic operations without ever reconstructing the sensitive private key:
+
+```julia
+# The first coefficient is the secret
+sk = first(coeff)
+pk = g^sk
+
+# Elements to be exponentiated
+elements = [g^2, g^3, g^5]
+
+# Each participant proves knowledge of their share
+simulators = [exponentiate(g, elements, di, verifier) for (ni, di) in enumerate(d_vec)]
+exponentiations = [s.proposition for s in simulators]
+proofs = [s.proof for s in simulators]
+
+# Merge shares to reconstruct the secret
+full_exponentiation = merge_exponentiations(setup, elements, exponentiations, proofs)
+verify(full_exponentiation) # true
+```
+
+This implementation finds critical applications in distributed systems requiring high security and trust distribution. For instance, in threshold encryption systems, the decryption key can be shared among multiple authorities, requiring collaboration for decryption while maintaining security even if some authorities are compromised. The module supports both threshold exponentiation and decryption operations through the same underlying principles, with specialized merge functions available for each use case. The implementation provides comprehensive verification at every step, ensuring that partial operations can be validated before final reconstruction or application.
+
+The VSS scheme implemented here provides strong security guarantees through its information-theoretic security properties for the secret sharing aspect, combined with the computational security of the verification components. This makes it particularly suitable for long-term secure applications where trust distribution and verifiability are crucial requirements. For detailed implementations of specific applications like threshold decryption ceremonies, users are encouraged to examine the comprehensive test suite in `test/secretsharing.jl`, which provides additional examples and use cases.
 
 ## Generator Commitment Shuffle
 
@@ -266,3 +320,11 @@ For implementation details, examples, and test cases, please refer to the releva
 7. Feldman, P. "A practical scheme for non-interactive verifiable secret sharing." In 28th Annual Symposium on Foundations of Computer Science (1987) (pp. 427-438). IEEE.
 
 8. Smith, W.D. "Cryptography meets voting." (2005)
+
+
+
+
+
+
+
+
