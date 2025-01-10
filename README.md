@@ -243,9 +243,7 @@ full_exponentiation = merge_exponentiations(setup, elements, exponentiations, pr
 verify(full_exponentiation) # true
 ```
 
-This implementation finds critical applications in distributed systems requiring high security and trust distribution. For instance, in threshold encryption systems, the decryption key can be shared among multiple authorities, requiring collaboration for decryption while maintaining security even if some authorities are compromised. The module supports both threshold exponentiation and decryption operations through the same underlying principles, with specialized merge functions available for each use case. The implementation provides comprehensive verification at every step, ensuring that partial operations can be validated before final reconstruction or application.
-
-The VSS scheme implemented here provides strong security guarantees through its information-theoretic security properties for the secret sharing aspect, combined with the computational security of the verification components. This makes it particularly suitable for long-term secure applications where trust distribution and verifiability are crucial requirements. For detailed implementations of specific applications like threshold decryption ceremonies, users are encouraged to examine the comprehensive test suite in `test/secretsharing.jl`, which provides additional examples and use cases.
+The module provides specialized merge functions for both threshold exponentiation and decryption operations, ensuring partial operations can be validated before final reconstruction. For detailed implementations of specific applications like threshold decryption ceremonies, users are encouraged to examine the comprehensive test suite in `test/secretsharing.jl`.
 
 ## Generator Commitment Shuffle
 
