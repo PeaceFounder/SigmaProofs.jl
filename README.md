@@ -2,23 +2,55 @@
 
 [![codecov](https://codecov.io/gh/PeaceFounder/SigmaProofs.jl/graph/badge.svg?token=6LUFS7ZZPE)](https://codecov.io/gh/PeaceFounder/SigmaProofs.jl)
 
-SigmaProofs is an ultimate swiss knife for implementing cryptogrpahic protocols that uses group based zero knowledge proofs often having commitment, challenge and reply structure for the proofs. This package includes a Verificatum compatable parser which is easuy to use for writting challenges and doing serialization/deserialization of a whole simulator which can often be a rather daunting task. Easy to use ElGamal implementation is also made necessary for reencryption mixnets as further used by ShuffleProofs.jl.
+SigmaProofs.jl is a comprehensive toolkit for implementing cryptographic protocols that utilize group-based zero-knowledge proofs. The package specializes in proofs with a commitment-challenge-reply structure and includes a Verificatum-compatible parser for handling challenges and managing simulator serialization/deserialization. It also provides an easy-to-use ElGamal implementation, essential for reencryption mixnets as used in ShuffleProofs.jl.
 
-The provided proofs are made verifier agnostic making it easy to explore the specification space for writing challenges for the proofs and implement different generator basis algorithms. Every proof is treated as simulator that consists of three parts:
+## Core Architecture
 
-- `Proposition`: the statement that is being proved with a followiong proof type
-- `Proof`: a proof that supports the statement
-- `Verifier`: a verifier that participates in proof generation and can attest validity of the proof
+The package employs a verifier-agnostic design that facilitates exploration of proof specifications and generator basis algorithms. Each proof is implemented as a simulator consisting of three components:
 
-The `Verifier` is often made noninteractive via FiatShamir transformation nevertheless if one wishes interacive proofs are also supported. This is possible to do via the same codebas as Julia does not colour functions with `@async` as many other programing languages do (although you would probably not need this). 
+- A `Proposition` defining the statement to be proved
+- A `Proof` supporting the statement
+- A `Verifier` participating in proof generation and validation
 
-The methods that are uniformly implemnted are `prove(::Proposition, secrets..., ::Verifier)::Proof`, `challenge(::Verifier, ::Proposition, args...)`, `verify(::Proposition, ::Proof, ::Verifier)::Bool` and `proof_type(::Type{<:Proposition})::Type{<:Proof}`. To make the proofs convinient to use most of the proposition types expose construction methods that has semantics `construct(args..., secrets..., ::Verifier)::Simulator` like for instance `exponentiate(g, sk, verifier)`. The simulator has fields `proposition`, `proof`, `verifier` and can be convininiently verified via `verify(::Simulator)::Bool` method. In addition there is `generator_basis(::Verifier, ::Type{<:Group}, N)::Vector{G}` that produces independent generator basis vector particulalry useful for generalized pedersen commitments.
+While proofs are typically made non-interactive through Fiat-Shamir transformation, interactive proofs are also supported through the same codebase, leveraging Julia's unique handling of asynchronous functions.
 
-The `SigmaProofs` implements a *Verificatum* inspired verifier that provides the same `Verifier` semantics, uses the same generator basis algorithm as in Verificatum specification. The challenges to the proofs with the verifier are constructed using binary tree parser as given in the specification implemnted in `Parsers` module. However, it is important to not that only `ShuffleProofs` is implemented to be compatable with the *Verificatum* psecification as other proof types are not considered there. This package can be looked as a one possible way for verifier extension to other proof types. 
+The package implements several core methods that form the foundation of its zero-knowledge proof system:
+
+* `prove(::Proposition, secrets..., ::Verifier)::Proof`
+  - Generates a proof for a given proposition using provided secret values
+  - Takes a proposition defining what to prove, the secret values needed for the proof, and a verifier
+  - Returns a proof object that can be verified by others
+
+* `challenge(::Verifier, ::Proposition, args...)` 
+  - Generates a challenge for interactive or Fiat-Shamir transformed proofs
+  - Used by the verifier to ensure the prover knows the claimed secrets
+  - Takes additional arguments specific to the proof type being constructed
+
+* `verify(::Proposition, ::Proof, ::Verifier)::Bool`
+  - Validates whether a proof correctly demonstrates the proposition
+  - Returns true only if the proof is valid for the given proposition
+  - Doesn't require knowledge of any secret values
+
+* `proof_type(::Type{<:Proposition})::Type{<:Proof}`
+  - Maps proposition types to their corresponding proof types
+  - Enables generic programming with different proof systems
+  - Helps maintain type safety across the proving system
+
+For convenience, most proposition types provide construction methods with the signature:
+```julia
+construct(args..., secrets..., ::Verifier)::Simulator
+```
+These methods package together the proposition, proof, and verifier into a simulator object for easier handling.
+
+The package also provides generator creation functionality:
+```julia
+generator_basis(::Verifier, ::Type{<:Group}, N)::Vector{G}
+```
+This method produces a vector of independent generators, crucial for creating Pedersen commitments and other cryptographic constructions where generator independence is required for security.
 
 ## LogProofs
 
-- `LogProofs` The basis of the zero knowledge, for proving statements `PK{(x): y <- g^x}` which is known in the literature as *SchnorrProof* used for proving the knowledge of an exponent linking two public group elements `(g, y)`. On it's basis via adding a `suffix` message to the challenge a cryptographic signature is made known as *SchnorrSignature*. The other type of the proof is `PK{(x): A_i y_i <- g_i^x }` which proves that a lsit of pairs `(g_i, y_i)` has the same exponent known as *ChaumPedersenProof*. 
+LogProofs forms the foundation of zero-knowledge proofs in the package, implementing both Schnorr and Chaum-Pedersen proofs. The Schnorr proof demonstrates knowledge of an exponent linking two public group elements (g, y) with the statement `PK{(x): y <- g^x}`. When combined with a suffix message in the challenge, it creates the Schnorr Signature. The Chaum-Pedersen proof extends this to prove that a list of pairs (g_i, y_i) shares the same exponent: `PK{(x): A_i y_i <- g_i^x}`.
 
 ```julia
 using CryptoGroups
@@ -35,15 +67,12 @@ g_vec = [g, g^2, g^5]
 simulator = exponentiate(g_vec, sk, verifier)
 
 verify(simulator) # true
-
 simulator.proposition.y == [pk, pk^2, pk^5] # true
 ```
 
-## ElGamal and DecryptionProofs
+## ElGamal and Decryption Proofs
 
- ElGamal cypherrtext is encoded in `ElGamalRow` type which can be initialized with `(a, b)` either being elements of a group or an a tuple of elements representing generalized ElGamal cypheretxt that can extend the amount of information that can be encoded. When initialized with a single group element or a tupel it is presumed to be a message. The type suppports `width` method telling how wide the encoded cyphertext is.
-
-ElGamalRow elements can conviniently be reencrypted with encryptor initialized with `Enc` type and then also decrypted with `Dec`. Convineitly the encryptor can also be used to initialize the cyphertexts.
+The package provides a robust implementation of ElGamal encryption through the `ElGamalRow` type, supporting both standard and generalized ElGamal ciphertexts. Messages can be conveniently encrypted using the `Enc` type and decrypted with `Dec`.
 
 ```julia
 using CryptoGroups
@@ -60,20 +89,16 @@ plaintexts = (g^2, g^5)
 r = (8, 10)
 
 ciphertext = enc(plaintexts, r) 
-ciphertext == ElGamalRow(g .^ r, pk .^r .* m) # true
-
-dec(ciphertext) == plaintexts # 
+dec(ciphertext) == plaintexts # true
 width(ciphertext) == 2 
 
-# Arithmetic operations `*`, `^` and `/` are also supported
-
-dec(ciphertext * cyphertext) == plaintexts .* plaintexts
+# Arithmetic operations
+dec(ciphertext * ciphertext) == plaintexts .* plaintexts
 dec(ciphertext ^ 7) == plaintexts .^ 7
 dec(ciphertext / enc(ciphertext, r)) == (one(g), one(g))
 ```
-The latter division can be used as plaintext equivalence test for the package. The arithmetic operations are convinient to make some zero knowledge proof implementations more coincise.
 
-`DecryptionProofs` takes *CahumPedersenProofs* and uses them to construct `ElGamalRow` cypheretext vector and can produce coresponding zero knowledge proofs of correct decryption:
+The DecryptionProofs module extends Chaum-Pedersen proofs to handle ElGamal ciphertext vectors and generate zero-knowledge proofs of correct decryption:
 
 ```julia
 using CryptoGroups
@@ -82,7 +107,6 @@ using SigmaProofs.DecryptionProofs: exponentiate, verify
 
 g = @ECGroup{P_192}()
 verifier = ProtocolSpec(; g)
-
 
 sk = 123
 pk = g^sk
@@ -95,136 +119,150 @@ cyphertexts = encryptor(plaintexts, rand(2:order(g)-1, length(plaintexts)))
 simulator = decrypt(g, cyphertexts, sk, verifier)
 
 verify(simulator) # true
-simultor.proposition.plaintexts == plaintexts
+simulator.proposition.plaintexts == plaintexts
 ```
 
-## RangeProofs
+The arithmetic operations on ElGamal ciphertexts enable the construction of plaintext equivalence tests (PET), a crucial tool in cryptographic protocols. To test if two ciphertexts encode the same plaintext without decrypting them, one can divide the ciphertexts and prove that the result encrypts the identity element. This is implemented by reencrypting the quotient with a fresh random value and providing a zero-knowledge proof that the reencryption decrypts to one(g). This technique is particularly valuable in voting systems for detecting duplicate votes or in anonymous credential systems for revocation checks.
 
-Range proofs allow one tow prove to the verifier that an integer within a certain cyphertext or a commit is within a given range without revealing it in the first place. The most simple method is `bitenc` that can produce proof that given elgamal cyphertex is either `(g^r, pk^r * 𝐺) OR (g^r, pk^r / 𝐺)` without revealing `r`. 
-```
+## Range Proofs
+
+Range proofs enable verification that an integer within a ciphertext or commitment falls within a specified range without revealing the value. The package implements several range proof variants, from simple bit encoding to n-ary decomposition for arbitrary ranges. These proofs serve as fundamental building blocks for various cryptographic applications including identity-based signatures, sealed bid auctions, and homomorphic tallying in e-voting systems.
+
+The simplest method, `bitenc`, proves that an ElGamal ciphertext encodes either 0 or 1, implementing the statement `(g^r, pk^r * 𝐺) OR (g^r, pk^r / 𝐺)` without revealing `r`:
+
+```julia
 simulator = bitenc(g, pk, true, verifier)
-@test verify(simulator)
+verify(simulator) # true
 ```
-the proposition `ElGamalBitRange` contains fields `x` and `y` that are elgamal encryptions. The proof is taken directly from a paper:
 
-- [1]: Ronald Cramer, Rosario Gennaro, and Berry Schoenmakers. 1997. A secure and optimally efficient multi-authority election scheme. In Proceedings of the 16th annual international conference on Theory and application of cryptographic techniques (EUROCRYPT'97). Springer-Verlag, Berlin, Heidelberg, 103–118. https://link.springer.com/chapter/10.1007/3-540-69053-0_9
+For commitment-focused applications, `bitcommit` provides a more efficient alternative using Pedersen commitments:
 
-To commit arbitrary values n-arry decomposition is used. It is possible to reduce used group elements making the proof for commits only. For that we have a `bitcommit(g::G, h::G, value::Bool, verifier::Verifier)::Simulator` function which is analougous to `bitenc` except now `h` must be indeoendent from `g` and produces pedersen commitment in the result.
-
-The `bitcommit` function is generalized with n-ary decomposition into `rangecommit(range::Union{Int, UnitRange}, g::G, h::G, value::Int, ::Verifier)`. When the range is integer then the range is assumed to be `0 <= value < 2^n`. Arbitray ranges can be useful for identity based signatures. The general idea is that client generates and identity provider signs your commitment `C = h^β * g^v`. The value can encode birth date or latitude/longtitude which can allow to prove to a service provider that your age is over 18 or that you live in a particular contry via issuing a requested range proof. Such setup prevents the identity provider to learn when or what you have accessed.
-
-Another application of range commitments is that they can be used in a sealed bid auctions. An intersting variant is a Vickrey auction where the highest bidder wins but pasy the second-highest bid price. In such scheme the bidder signs a commitment and sends that to the dealer along with oppening. The dealer publishes the commitment on the buletin baord while keeps signature and oppening a secret. When all `bids <- h^β * g^v` are collected the dealer can anounce and prove the winner via running 
+```julia
+simulator = bitcommit(g, h, value, verifier)
+verify(simulator) # true
 ```
-simulator = vickrey_auction(bids, g, h, 𝛃, verifier)` 
+
+The package extends these basic proofs to handle arbitrary ranges through n-ary decomposition with `rangecommit`:
+
+```julia
+# For range 0 <= value < 2^n
+simulator = rangecommit(n, g, h, value, verifier)
+
+# For arbitrary ranges
+simulator = rangecommit(0:100, g, h, value, verifier)
+```
+
+These range commitments enable powerful applications in identity-based systems. For example, a client can generate a commitment `C = h^β * g^v` encoding personal data (like birth date or location), which an identity provider signs. The client can later prove age requirements or geographic location to service providers without revealing exact values.
+
+For sealed bid auctions, particularly Vickrey auctions where the highest bidder wins but pays the second-highest price, the package provides specialized functionality:
+
+```julia
+# Dealer processes collected bids and proves winner
+simulator = vickrey_auction(bids, g, h, 𝛃, verifier)
 verify(simulator) # true
 
 (; winner, value_win) = simulator.proposition
 ```
-where the `winner` is the index in the list of bids and `value_win` is the winning value. The contract obligation then can be enforced by the dealer anouncing the signature while leaving other bidders' identitites and their bidded values secret. For full example see `examples/auctions.jl`.
 
-The last piece of puzzle is range proof use in homomorphic tallying methods using in some evoting system designs. Here the vote is ElGamal encrypted and then homomoprhically talllied with only resulting tally being decrypted in trheshold decryption ceremony without revelaing individual votes. For this process to work, however, there is a need to ensure that voters had cast their votes honestly within allowed range. For simple `yes/no` referenda one would use `bitenc` wheras for multiple options one can make range encryption proofsexposed with `rangeenc(range::Union{Int, UnitRange}, g::G, pk::G, value::Int, ::Verifier; 𝐺)::Simulator` which uses `rangecommit` and also provides proof of correct ElGamal encryption where used randmization factors for `a` and `b` are the same.
+The framework also supports range proofs for homomorphic tallying in e-voting systems. The `rangeenc` function ensures votes are honestly cast within allowed ranges:
 
-## SecretSharing
+```julia
+# For simple yes/no voting
+simulator = bitenc(g, pk, vote, verifier)
 
-The `SigmaProofs.SecretSharing` module provides an implementation of the Feldman Verifiable Secret Sharing (VSS) scheme, a cryptographic protocol that extends Shamir's Secret Sharing with a verification mechanism.
-
-The Feldman VSS scheme allows a dealer to distribute shares of a secret among participants in a way that enables the participants to verify the consistency of their shares without revealing the secret. This is achieved by the dealer publishing commitments to the coefficients of the polynomial used to generate the shares.
-
-The module includes the following key functionality:
-
-1. **Secret Sharing Setup**: The `sharding_setup(g::G, nodes::Vector{G}, coeff::Vector{G}, ::Verifier)::Simulator{ShardingSetup}` function generates the necessary components for the secret sharing scheme, including the dealer's public key, the participants' public keys, and the commitments to the polynomial coefficients.
-
-2. **Share Verification**: The `verify` function allows participants to verify the consistency of their shares by checking the published commitments.
-
-3. **Secret Reconstruction**: The `merge_exponentiations(::Simulator{ShardingSetup}, ::Vector{G}, ::Vector{Exponentiation{G}}, proof::Vector{ChaumPedersenProof{G}})::Simulator{Exponentiation}` and `merge_decryptions(::Simulator{ShardingSetup}, ::Vector{<:ElGamalRow{G}}, ::Vector{Exponentiation{G}}, proof::Vector{ChaumPedersenProof{G}})::Simulator{Decryption}` functions enable the reconstruction of the secret by combining a threshold number of shares using Lagrange interpolation.
-
-4. **Utility Functions**: The module provides helper functions for polynomial evaluation (`evaluate_poly`) and Lagrange coefficient computation (`lagrange_coef`), which are essential for both the sharing and reconstruction processes.
-
-The module also includes support for generating proofs and verifying the consistency of the scheme using the `SigmaProofs` framework. For more detailed use see `test/secretsharing.jl` file.
-
-## CommitmentShuffle
-
-Commitment shuffle lays out a new shuffle protocol (I am not aware of it's previous uses) that uses generalized pedersen commitments. In contrast to `ShuffleProofs` it is interactive, however, interactivity is asynchronous and it provides information-theoretic security for a shuffle that is sometimes needed fto ensuring ever lasting privacy in case a new cryptograhic breaking algorithm surfaces or cryptographic relevant qauntuim computer ever gets built in the future. Another benefit of the shuffle is that it's outputs are unstructured and can contain anything allowing easy cryptographic protocol composition. The procol is:
-
-1. Setup:
-   - A verifiable generator list is established
-   - A blinding generator 'h' is set
-
-2. Dealer-member interaction:
-   - Dealer sends a verifiably random generator g_i to each member
-   - Member generates x_i and β_i
-   - Member computes:
-     * u_i <- g_i^x
-     * C = h^β * u_i
-     * PoK{(x): u_i = g_i^x_i)
-   - Member sends back to dealer:
-     * Signed {C}
-     * β_i
-     * u_i
-     * PoK{(x): u_i <- g_i^x_i)
-   - Dealer publishes the commitment on a public bulletin board
-
-3. Dealer's consistency proof:
-   - Dealer generates a secret vector r_i
-   - Computes A <- h^r * ∏ u_i^s_i
-   - Computes e_i from anouncement A using Fiat-Shamir transform
-   - Computes secrets:
-     * z = r + \sum_i \beta_i * e_i
-     * w_i = s_i + e_i 
-   - Announces on public bulletin board:
-     * Shuffled list of (u_i, g_i, PoK{(x_i): u_i = g_i^x_i}, w_i) and anouncement A, z
-
-4. Verification process:
-   - Verify that every g_i was generated verifiably random
-   - Verify PoK for every generator used in the commitment proof PoK{(x): u_i = g_i^x_i}
-   - Compute e_i from A
-   - Check that h^z * ∏ u_i^(s_i) = A * ∏ C_i^e_i
-
-The second step can be made less interactive if member instead picks a random seed and generates the generator with it locally and deliver back the seed to the dealer. This scheme is also very convinient to be used for implemetning receipt freeness and coercion resistance that will be discloused shortly in `TallyProofs.jl`. 
-
-To use the protocol we every member creates a commitment with `commit` method that is provided:
+# For multiple options
+simulator = rangeenc(range, g, pk, vote, verifier; 𝐺)
 ```
+
+These range proofs work in conjunction with homomorphic tallying methods where individual votes remain encrypted while allowing computation of the final tally through threshold decryption ceremonies. The proofs ensure vote validity without compromising voter privacy.
+
+## Secret Sharing
+
+The SecretSharing module implements Feldman's Verifiable Secret Sharing (VSS) scheme, extending Shamir's Secret Sharing with built-in verification capabilities. This protocol enables a dealer to distribute shares of a secret among participants while allowing them to verify their shares' consistency without compromising the secret's security.
+
+The module provides comprehensive functionality for the complete VSS lifecycle:
+
+```julia
+# Secret sharing setup
+simulator = sharding_setup(g, nodes, coeff, verifier)
+
+# Reconstruction using threshold shares
+merged = merge_exponentiations(simulator, shares, proofs, verifier)
+decrypted = merge_decryptions(simulator, ciphertexts, shares, proofs)
+```
+
+The implementation includes essential components for polynomial evaluation and Lagrange interpolation, fully integrated with the SigmaProofs framework for generating and verifying consistency proofs. For detailed implementation examples, refer to the test/secretsharing.jl file.
+
+## Independent Generator Commitment Shuffle
+
+The package introduces a novel shuffle protocol specifically designed for commitments using independent generators. Unlike generic commitment shuffles, this protocol assigns each participant a unique, independently generated base for their commitment. This interactive but asynchronous protocol provides information-theoretic security, making it particularly valuable for applications requiring long-term privacy guarantees against future cryptographic breakthroughs or quantum computing advances. The uniqueness of generators prevents malicious substitution of commitments while maintaining unlinkability of the shuffle outputs.
+
+Here's a typical usage example:
+
+```julia
+# Member creates a commitment using their unique generator g
 m = g^42
-row::CommittedRow, C::G, β::BigItn = commit(m, g::G, h::G, verifier)
-```
-where `g` is unique generator provided to the member by the dealer and `m` will is a committed message. The commitment is signed by the member and the triple is delivered to the dealer over confidnetial channel. The dealer checks that `C = h^β * u`, `PoK{(x): u <- g^x}` and that `g` is an independent generator provided exlusivelly for the member (publically there is no link between the independent generator and the member's identity). 
+row, C, β = commit(m, g, h, verifier)  # g is unique for each member
 
-When the collection period closes the dealer shuffles the resulting commitments and anounces shuffled rows along with a shuffle proof which can be produces via:
-
-```
+# Dealer shuffles commitments and generates proof
 simulator = shuffle(rows, h, 𝐂, 𝛃, verifier)
 verify(simulator) # true
 ```
-The essence of the proof is that it checks that every generator is indpendent and that every commitment has a unique generator preventing substitution or removal and that the `PoK{(x): u <- g^x}` which ensures that `u` is indepent generator provided that `g` signs the message `m` that is passed as suffix to the verifier challenge to the `Schnorr` proof and hence signs it.
 
-## Related Work
+The protocol follows a four-phase process:
 
-There is a substatntial work done in the literature for automating protocol scheme generation [1, 2]. This is interesting endavour, however, it does sacrifdice the ability to specify resulting protocol whoe would want to implement verification of the proofs independently with the spirit of software independence. 
+1. Setup phase where each participant receives a unique, verifiably generated base element g_i and a common blinding generator h
+2. Dealer-member interaction where each member creates a commitment using their assigned generator and proves knowledge of the committed value
+3. Dealer's consistency proof ensuring proper shuffling while preserving the binding between commitments and their unique generators
+4. Verification process confirming both the validity of individual commitments and the integrity of the shuffle
 
-For instance Schor protocol for provong knowledge for a list of tuples `(g_i, y_i)` can be either written as
+The use of independent generators provides stronger security guarantees compared to generic commitment shuffles, as each commitment is intrinsically bound to its creator through the unique generator while maintaining privacy through the shuffle. This implementation is particularly suitable for receipt-freeness and coercion resistance in voting systems, with extended functionality available in the upcoming TallyProofs.jl package.
+
+## Related Work and Design Considerations
+
+While automated protocol scheme generation has been explored extensively in academic literature, SigmaProofs.jl prioritizes explicit protocol specification to facilitate independent verification. This design choice acknowledges the trade-off between automation and specification clarity, particularly important for security-critical applications.
+
+For example, a Schnorr protocol proving knowledge for multiple tuples can be specified in two equivalent but distinct ways:
 ```
 PoK{(x_1,...,x_N): ∧_i y_i <- g_i^x_i}
 ```
-or as
+or
 ```
 ∧_i PoK{x_i: y_i <- g_i^x_i}
 ```
-proving the same thing. The difference is that in the first case one would use a challenge that lists all inputs in the protocol wheras in the second case every challenge is compputed seperatelly from the inputs. 
 
-Choices like theese general compilar makes makes it much harder for one from making an independent verifier for the proofs and their specification. Perhaps one could write a specification for the compiler instead then, but at the present to my knowledge such compilers are unable to produce more complex proofs bulletproofs or proofs of shuffle which need to be added add hoc. So their applicability is limited and one would still need to return to the pen and paper implementation and then implement it. Nevertheless such proof systems can be a valuable tool for finding out and experimenting with new protocol designs.
+While both approaches prove the same statement, they differ in challenge computation methods, illustrating the importance of explicit protocol specification for independent verification.
 
-- [1] Lueks, Wouter et al. zksk: A Library for Composable Zero-Knowledge Proofs. Proceedings of the 18th ACM Workshop on Privacy in the Electronic Society (2019)
-- [2] J. B. Almeida, E. Bangerter, M. Barbosa, S. Krenn, A.-R. Sadeghi, T. Schneider. A Certifying Compiler for Zero-Knowledge Proofs of Knowledge Based on Sigma Protocols. In 15th European Symposium on Research in Computer Security (2010)
+The package incorporates established cryptographic techniques and builds upon significant prior work:
 
-Other more specialized proofs exist. For instance currently the state of the art range proofs are are made with bulletproofs [3, 4]. In contrast to provided implementation within `SigmaProofs` their proofs are in logarithmic of the range bitlength wheras here it grows linear with bitrange size. This can be useful for reducoing the size for identification schemes or auctions, but may not be what one needs for homomorphic evoting systems where the ranges are small.
+- Verificatum verifier implementation and parser following Wikström's specifications
+- Zero-knowledge proof fundamentals based on Schoenmakers' comprehensive lecture notes
+- Range proofs implementing Cramer, Gennaro, and Schoenmakers' secure election scheme
+- Secret sharing following Feldman's practical VSS scheme
+- Modern e-voting cryptography principles as outlined by Smith
 
-- [3] Bünz, B., Bootle, J., Boneh, D., Poelstra, A., Wuille, P., & Maxwell, G. Bulletproofs: Short Proofs for Confidential Transactions and More. IEEE Symposium on Security and Privacy (2018)
-- [4] BulletProofs implementation in Rust https://doc.dalek.rs/bulletproofs/
+For specific applications requiring optimized range proofs, alternatives like Bulletproofs offer logarithmic-size proofs compared to our linear implementation. However, our approach remains practical for small ranges common in e-voting systems and provides better composability with other protocols.
 
-The SigmaProofs implements Verificatum verifier, parser along with independent generator basis generation that is specified in [5]. The proof of knowledge proofs for logarithm are well explained in lecture notes which I highly recomend anyone starting out their zero knowledge proofs journey [6]. The bit range proofs are implemented according to [7]. The secret sharing is being implemented according to [8]. There is a good overview of zero knowledge proofs used in evoting which one can fairly easy implement with SigmaProofs offered infrastructure [
+## Future Development
 
-- [5] Wikstrom, D. How To Implement A Stand-Alone Veriﬁer for the Veriﬁcatum Mix-Net. 
-- [6] Schoenmakers, B. Lecture Notes Cryptographic Protocols (Version 1.9). Department of Mathematics and Computer Science, Technical University of Eindhoven. (2024)
-- [7] Ronald Cramer, Rosario Gennaro, and Berry Schoenmakers. A secure and optimally efficient multi-authority election scheme. In Proceedings of the 16th annual international conference on Theory and application of cryptographic techniques (1997) https://link.springer.com/chapter/10.1007/3-540-69053-0_9
-- [8] Feldman, P. A practical scheme for non-interactive verifiable secret sharing. In 28th Annual Symposium on Foundations of Computer Science (1987) (pp. 427-438). IEEE. https://www.cs.umd.edu/~gasarch/TOPICS/secretsharing/feldmanVSS.pdf
-- [9] Smith, W.D. Cryptography meets voting. (2005)
+Future updates will focus on expanding the protocol suite while maintaining the package's commitment to explicit specification and independent verifiability. Planned developments include integration with TallyProofs.jl and enhanced support for complex cryptographic protocol composition.
+
+For implementation details, examples, and test cases, please refer to the relevant test files in the repository.
+
+## References
+
+1. Lueks, Wouter et al. "zksk: A Library for Composable Zero-Knowledge Proofs." Proceedings of the 18th ACM Workshop on Privacy in the Electronic Society (2019).
+
+2. J. B. Almeida, E. Bangerter, M. Barbosa, S. Krenn, A.-R. Sadeghi, T. Schneider. "A Certifying Compiler for Zero-Knowledge Proofs of Knowledge Based on Sigma Protocols." In 15th European Symposium on Research in Computer Security (2010).
+
+3. Bünz, B., Bootle, J., Boneh, D., Poelstra, A., Wuille, P., & Maxwell, G. "Bulletproofs: Short Proofs for Confidential Transactions and More." IEEE Symposium on Security and Privacy (2018).
+
+4. Wikström, D. "How To Implement A Stand-Alone Verifier for the Verificatum Mix-Net."
+
+5. Schoenmakers, B. "Lecture Notes Cryptographic Protocols (Version 1.9)." Department of Mathematics and Computer Science, Technical University of Eindhoven. (2024).
+
+6. Ronald Cramer, Rosario Gennaro, and Berry Schoenmakers. "A secure and optimally efficient multi-authority election scheme." In Proceedings of the 16th annual international conference on Theory and application of cryptographic techniques (EUROCRYPT'97). Springer-Verlag, Berlin, Heidelberg, 103–118.
+
+7. Feldman, P. "A practical scheme for non-interactive verifiable secret sharing." In 28th Annual Symposium on Foundations of Computer Science (1987) (pp. 427-438). IEEE.
+
+8. Smith, W.D. "Cryptography meets voting." (2005)
