@@ -29,11 +29,9 @@ function gen_roprg(proposition::LogKnowledge, x::Integer)
     return gen_roprg([octet(y)..., int2octet(x)...])
 end
 
-function prove(proposition::LogKnowledge{G}, verifier::Verifier, x::Integer; suffix = nothing, roprg = gen_roprg(proposition, x)) where G <: Group
+function prove(proposition::LogKnowledge{G}, verifier::Verifier, x::Integer; suffix = nothing, roprg = gen_roprg(proposition, x), r = rand(roprg(:x), 2:order(G) - 1)) where G <: Group
 
     (; g, y) = proposition
-
-    r = rand(roprg(:x), 2:order(G) - 1)
 
     R = g^r
 
