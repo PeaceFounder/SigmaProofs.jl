@@ -31,31 +31,14 @@
         {0,4000}. -->
    <descr>{{DESCR}}</descr>
 
-   <!-- Number of parties taking part in the protocol execution. This must 
-        be a positive integer that is at most 25. -->
-   <nopart>1</nopart>
-
    <!-- Statistical distance from uniform of objects sampled in protocols 
         or in proofs of security. This must be a non-negative integer at 
         most 256. -->
    <statdist>{{STATDIST}}</statdist>
 
-   <!-- Threshold number of parties needed to violate the privacy of the 
-        protocol, i.e., this is the number of parties needed to decrypt. 
-        This must be positive, but at most equal to the number of parties. 
-        -->
-   <thres>1</thres>
-
    <!-- Group over which the protocol is executed. An instance of a 
         subclass of com.verificatum.arithm.PGroup. -->
    <pgroup>{{PGROUP}}</pgroup>
-
-   <!-- Width of El Gamal keys. If equal to one the standard El Gamal 
-        cryptosystem is used, but if it is greater than one, then the 
-        natural generalization over a product group of the given width is 
-        used. This corresponds to letting each party holding multiple 
-        standard public keys. -->
-   <keywidth>1</keywidth>
 
    <!-- Bit length of challenges in non-interactive random-oracle proofs. 
         -->
@@ -82,21 +65,5 @@
         WARNING! Do not change the default unless you know exactly what you 
         are doing. This field is not validated syntactically. -->
    <rohash>{{ROHASH}}</rohash>
-
-   <!-- Determines if the proofs of correctness of an execution are 
-        interactive or non-interactive. Legal valus are "interactive" or 
-        "noninteractive". -->
-   <corr>noninteractive</corr>
-
-   <!-- Default width of ciphertexts processed by the mix-net. A different 
-        width can still be forced for a given session by using the "-width" 
-        option. -->
-   <width>1</width>
-
-   <!-- Maximal number of ciphertexts for which precomputation is 
-        performed. Pre-computation can still be forced for a different 
-        number of ciphertexts for a given session using the "-maxciph" 
-        option during pre-computation. -->
-   <maxciph>0</maxciph>
 
 </protocol>

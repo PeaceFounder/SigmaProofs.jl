@@ -42,6 +42,7 @@ struct Leaf <: Tree
 end
 
 ==(a::Leaf, b::Leaf) = a.x == b.x
+Base.length(x::Leaf) = length(x.x)
 
 struct Node <: Tree
     x::Vector{Tree} # Leaf or Node
@@ -190,13 +191,17 @@ function Leaf(x::Integer, k::Integer)
     return Leaf(result)
 end
 
+# Verificatum Java implementation uses signed values internally (-/+)
+# but file serialization treats all values as unsigned, saving one bit
+Leaf(x::Integer; L=bitlength(x)) = Leaf(x, cld(L + 1, 8)) 
+
 function Leaf(x::AbstractString)
     bytes = Vector{UInt8}(x)
     return Leaf(bytes)
 end
 
 Tree(x::Any) = Leaf(x) 
-Tree(x::BigInt; L=bitlength(x)) = Leaf(x, div(L + 1, 8, RoundUp)) 
+Tree(x::BigInt; L=bitlength(x)) = Leaf(x; L)
 Tree(x::Node) = x
 Tree(x::Leaf) = x
 Tree(x::Tuple; L=nothing) = Node(x; L)
@@ -224,8 +229,7 @@ end
 
 (h::HashSpec)(t::Tree) = h(convert(Vector{UInt8}, t))  ### need to relocate
 
-
-Tree(x::PGroup; L = bitlength(x)) = Leaf(value(x), div(L + 1, 8, RoundUp))
+Tree(x::PGroup; L = bitlength(x)) = Leaf(value(x), cld(L + 1, 8))
 
 # Probably I will need to replace 
 convert(::Type{G}, x::Leaf; allow_one=false) where G <: PGroup = convert(G, convert(BigInt, x); allow_one)
@@ -254,6 +258,9 @@ function convert(::Type{ECGroup{P}}, x::Node; allow_one=false) where P <: ECPoin
     return convert(ECGroup{P}, point_bytes; allow_one)
 end
 
+# Verificatum specifications should revise elliptic curve serialization
+# Instead of storing x,y coordinates in separate leaves, use standard octet encoding
+# This would enable universal curve support, reduced storage overhead, and better performance
 function Tree(g::G; L = bitlength(G)) where G <: ECGroup
 
     nbytes_field = cld(L, 8)  # Using cld instead of div(x, y, RoundUp) 
@@ -546,7 +553,9 @@ width_elgamal_row(::Type{<:ECGroup}, tree::Tree) = depth(tree) == 2 ? 1 : length
 width_elgamal_vec(::Type{<:PGroup}, tree::Tree) = depth(tree) == 2 ? 1 : length(tree[1])
 width_elgamal_vec(::Type{<:ECGroup}, tree::Tree) = depth(tree) == 3 ? 1 : length(tree[1])
 
-Tree(x::Vector{BigInt}; L = bitlength(maximum(x))) = Node([Leaf(i, L) for i in x])
+# I would need to error on this actually
+#Tree(x::Vector{BigInt}; L = bitlength(maximum(x))) = Node([Leaf(i, L) for i in x])
+Tree(x::Vector{BigInt}; L) = Node([Leaf(i; L) for i in x])
 
 export Tree, Node, Leaf, encode, decode, marshal, unmarshal
 

@@ -245,31 +245,6 @@ verify(full_exponentiation) # true
 
 The module provides specialized merge functions for both threshold exponentiation and decryption operations, ensuring partial operations can be validated before final reconstruction. For detailed implementations of specific applications like threshold decryption ceremonies, users are encouraged to examine the comprehensive test suite in `test/secretsharing.jl`.
 
-## Generator Commitment Shuffle
-
-The package introduces a novel shuffle protocol specifically designed for commitments using independent generators. Unlike generic commitment shuffles, this protocol assigns each participant a unique, independently generated base for their commitment. This interactive but asynchronous protocol provides information-theoretic security, making it particularly valuable for applications requiring long-term privacy guarantees against future cryptographic breakthroughs or quantum computing advances. The uniqueness of generators prevents malicious substitution of commitments while maintaining unlinkability of the shuffle outputs.
-
-Here's a typical usage example:
-
-```julia
-# Member creates a commitment using their unique generator g
-m = g^42
-row, C, β = commit(m, g, h, verifier)  # g is unique for each member
-
-# Dealer shuffles commitments and generates proof
-simulator = shuffle(rows, h, 𝐂, 𝛃, verifier)
-verify(simulator) # true
-```
-
-The protocol follows a four-phase process:
-
-1. Setup phase where each participant receives a unique, verifiably generated base element g_i and a common blinding generator h
-2. Dealer-member interaction where each member creates a commitment using their assigned generator and proves knowledge of the committed value
-3. Dealer's consistency proof ensuring proper shuffling while preserving the binding between commitments and their unique generators
-4. Verification process confirming both the validity of individual commitments and the integrity of the shuffle
-
-The use of independent generators provides stronger security guarantees compared to generic commitment shuffles, as each commitment is intrinsically bound to its creator through the unique generator while maintaining privacy through the shuffle. This implementation is particularly suitable for receipt-freeness and coercion resistance in voting systems, with extended functionality available in the upcoming TallyProofs.jl package.
-
 ## Related Work and Design Considerations
 
 While automated protocol scheme generation has been explored extensively in academic literature, SigmaProofs.jl prioritizes explicit protocol specification to facilitate independent verification. This design choice acknowledges the trade-off between automation and specification clarity, particularly important for security-critical applications.
