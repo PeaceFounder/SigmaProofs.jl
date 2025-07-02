@@ -553,10 +553,13 @@ width_elgamal_row(::Type{<:ECGroup}, tree::Tree) = depth(tree) == 2 ? 1 : length
 width_elgamal_vec(::Type{<:PGroup}, tree::Tree) = depth(tree) == 2 ? 1 : length(tree[1])
 width_elgamal_vec(::Type{<:ECGroup}, tree::Tree) = depth(tree) == 3 ? 1 : length(tree[1])
 
+# There is an inconsitency with regards to L here as here it is used to pass length in bits
+# wheras in other places it is in lentght of octets. Changing it to mean octets breaks ShuffleProofs tests
+# The API here needs to be revised. 
 # I would need to error on this actually
 #Tree(x::Vector{BigInt}; L = bitlength(maximum(x))) = Node([Leaf(i, L) for i in x])
-#Tree(x::Vector{BigInt}; L) = Node([Leaf(i; L) for i in x])
-Tree(x::Vector{BigInt}; L) = Node([Leaf(i, L) for i in x])
+Tree(x::Vector{BigInt}; L) = Node([Leaf(i; L) for i in x])
+#Tree(x::Vector{BigInt}; L) = Node([Leaf(i, L) for i in x])
 
 export Tree, Node, Leaf, encode, decode, marshal, unmarshal
 
