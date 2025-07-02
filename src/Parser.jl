@@ -555,7 +555,8 @@ width_elgamal_vec(::Type{<:ECGroup}, tree::Tree) = depth(tree) == 3 ? 1 : length
 
 # I would need to error on this actually
 #Tree(x::Vector{BigInt}; L = bitlength(maximum(x))) = Node([Leaf(i, L) for i in x])
-Tree(x::Vector{BigInt}; L) = Node([Leaf(i; L) for i in x])
+#Tree(x::Vector{BigInt}; L) = Node([Leaf(i; L) for i in x])
+Tree(x::Vector{BigInt}; L) = Node([Leaf(i, L) for i in x])
 
 export Tree, Node, Leaf, encode, decode, marshal, unmarshal
 
